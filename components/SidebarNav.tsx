@@ -36,12 +36,12 @@ export function SidebarNav() {
           <Link
             key={href}
             href={href}
-            className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+            className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
               isActive ? "nav-item-active" : "text-[#2A2A2A] hover:bg-black/[0.04]"
             }`}
           >
             <Icon
-              className="h-[18px] w-[18px] shrink-0"
+              className="nav-link-icon h-[18px] w-[18px] shrink-0"
               strokeWidth={1.75}
               aria-hidden="true"
             />

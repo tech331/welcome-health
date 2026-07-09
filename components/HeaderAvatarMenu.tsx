@@ -23,7 +23,7 @@ export function HeaderAvatarMenu() {
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-200 text-gray-500 transition-colors hover:bg-gray-300"
+        className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-white transition-colors hover:bg-white/25"
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label="Account menu"

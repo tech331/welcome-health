@@ -1,11 +1,21 @@
 import type { CaseManagerRecord } from "./caseManagers";
 import type { CaseManagerContact, ClientRecord } from "./clients";
+import { businessDaysBetween, formatRequestId } from "./format";
 import {
   getInitials,
   type PayerCaseManager,
   type PayerRecord,
   type PayerSupplier,
 } from "./payers";
+import type {
+  RequestActivityDetail,
+  RequestAttachment,
+  RequestClientSummary,
+  RequestDetail,
+  RequestItemDetail,
+  RequestQuoteDetail,
+  RequestSupplierSummary,
+} from "./requestDetail";
 import { isOpenRequest, type RequestRecord } from "./requests";
 import type { SupplierRecord } from "./suppliers";
 import {
@@ -39,6 +49,10 @@ const AIRTABLE_ITEMS_TABLE_ID =
 // Requestor options are sourced from the Users table.
 const AIRTABLE_USERS_TABLE_ID =
   process.env.AIRTABLE_USERS_TABLE_ID ?? "tbl7fqZOh1l9zfGiH";
+const AIRTABLE_QUOTES_TABLE_ID =
+  process.env.AIRTABLE_QUOTES_TABLE_ID ?? "tblgXBwjlZCl3nGFy";
+const AIRTABLE_ACTIVITIES_TABLE_ID =
+  process.env.AIRTABLE_ACTIVITIES_TABLE_ID ?? "tblaElDNG68teCUTz";
 
 // How long (seconds) to cache Airtable responses. Repeat page loads within
 // this window are served instantly from cache instead of re-fetching.
@@ -54,6 +68,7 @@ export function isAirtableConfigured(): boolean {
 
 type AirtableRecord = {
   id: string;
+  createdTime?: string;
   fields: Record<string, unknown>;
 };
 
@@ -170,6 +185,106 @@ async function createAirtableRecords(
   }
 
   return created;
+}
+
+async function updateAirtableRecord(
+  tableId: string,
+  recordId: string,
+  fields: Record<string, unknown>,
+): Promise<AirtableRecord> {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    throw new Error("Airtable is not configured (missing AIRTABLE_API_KEY)");
+  }
+
+  const response = await fetch(
+    `${AIRTABLE_API_URL}/${AIRTABLE_BASE_ID}/${encodeURIComponent(
+      tableId,
+    )}/${encodeURIComponent(recordId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ fields, typecast: true }),
+      cache: "no-store",
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Airtable update failed (${response.status}): ${await response.text()}`,
+    );
+  }
+
+  return (await response.json()) as AirtableRecord;
+}
+
+async function fetchAirtableRecordsByIds(
+  tableId: string,
+  ids: string[],
+): Promise<AirtableRecord[]> {
+  if (ids.length === 0) return [];
+
+  const uniqueIds = [...new Set(ids)];
+  const records: AirtableRecord[] = [];
+
+  // Airtable formula OR() is practical in small batches.
+  for (let i = 0; i < uniqueIds.length; i += 10) {
+    const chunk = uniqueIds.slice(i, i + 10);
+    const formula = `OR(${chunk
+      .map((id) => `RECORD_ID()='${id}'`)
+      .join(",")})`;
+    const apiKey = getApiKey();
+    if (!apiKey) return [];
+
+    const url = new URL(
+      `${AIRTABLE_API_URL}/${AIRTABLE_BASE_ID}/${encodeURIComponent(tableId)}`,
+    );
+    url.searchParams.set("filterByFormula", formula);
+
+    const response = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Airtable request failed (${response.status}): ${await response.text()}`,
+      );
+    }
+
+    const data = (await response.json()) as AirtableListResponse;
+    records.push(...data.records);
+  }
+
+  return records;
+}
+
+async function fetchRecordsLinkedToRequest(
+  tableId: string,
+  requestId: string,
+): Promise<AirtableRecord[]> {
+  const apiKey = getApiKey();
+  if (!apiKey) return [];
+
+  const url = new URL(
+    `${AIRTABLE_API_URL}/${AIRTABLE_BASE_ID}/${encodeURIComponent(tableId)}`,
+  );
+  url.searchParams.set(
+    "filterByFormula",
+    `FIND('${requestId}', ARRAYJOIN({Related Request}))`,
+  );
+
+  const response = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${apiKey}` },
+    cache: "no-store",
+  });
+
+  if (!response.ok) return [];
+  const data = (await response.json()) as AirtableListResponse;
+  return data.records;
 }
 
 function fieldToString(value: unknown): string {
@@ -331,7 +446,7 @@ function mapRequestRecord(
 
   return {
     id: record.id,
-    requestId: fieldToString(requestId),
+    requestId: formatRequestId(fieldToString(requestId)),
     requestor,
     status: fieldToString(status),
     clientIds: extractRecordIds(clientField),
@@ -880,6 +995,378 @@ export async function createNewRequest(
   const requestId = fieldToString(requestRecord.fields["Request ID"]);
   return {
     id: requestRecord.id,
-    requestId: requestId === "—" ? requestRecord.id : requestId,
+    requestId:
+      requestId === "—" ? requestRecord.id : formatRequestId(requestId),
   };
+}
+
+function mapAttachments(value: unknown): RequestAttachment[] {
+  if (!Array.isArray(value)) return [];
+  const attachments: RequestAttachment[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const attachment = item as Record<string, unknown>;
+    const id = typeof attachment.id === "string" ? attachment.id : "";
+    const url = typeof attachment.url === "string" ? attachment.url : "";
+    const filename =
+      typeof attachment.filename === "string" ? attachment.filename : "file";
+    if (!id || !url) continue;
+    const mapped: RequestAttachment = { id, url, filename };
+    if (typeof attachment.type === "string") {
+      mapped.type = attachment.type;
+    }
+    attachments.push(mapped);
+  }
+  return attachments;
+}
+
+function stripHtml(value: string): string {
+  return value
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function mapClientSummary(record: AirtableRecord): RequestClientSummary {
+  const { fields } = record;
+  return {
+    id: record.id,
+    displayName: getClientDisplayName(fields),
+    clientId: cleanString(fields["Client ID"]),
+    fundingType: cleanString(fields["Funding Type"]),
+    phone: cleanString(pickField(fields, ["Phone", "Phone Number"])),
+    dob: formatDob(fields["DOB"] ?? fields["Date of Birth"] ?? fields["dob"]),
+    addressLine1: cleanString(
+      pickField(fields, ["Address Line 1", "Address 1"]),
+    ),
+    addressLine2: cleanString(
+      pickField(fields, ["Address Line 2", "Address 2"]),
+    ),
+    city: cleanString(pickField(fields, ["City", "Suburb"])),
+    state: cleanString(pickField(fields, ["State"])),
+    postcode: cleanString(
+      pickField(fields, ["Postcode", "Post Code", "Zip"]),
+    ),
+  };
+}
+
+function mapItemDetail(record: AirtableRecord): RequestItemDetail {
+  const { fields } = record;
+  return {
+    id: record.id,
+    itemId: fieldToString(fields["Item ID"]),
+    name: cleanString(fields["Name"]) || "Untitled item",
+    category: cleanString(fields["Category"]),
+    quantity: toNumberOrNull(fields["Quantity"]),
+    url: cleanString(fields["URL"]),
+    notes: cleanString(fields["Notes"]),
+  };
+}
+
+function mapQuoteDetail(
+  record: AirtableRecord,
+  suppliersById: Map<string, RequestSupplierSummary>,
+): RequestQuoteDetail {
+  const { fields } = record;
+  const supplierIds = extractRecordIds(fields["Related Supplier"]);
+  const supplier = supplierIds[0]
+    ? (suppliersById.get(supplierIds[0]) ?? {
+        id: supplierIds[0],
+        name: "Unknown supplier",
+      })
+    : null;
+
+  return {
+    id: record.id,
+    quoteId: fieldToString(fields["Quote ID"]),
+    price: toNumberOrNull(fields["Price"]),
+    isManuallyEntered: Boolean(fields["Is Manually Entered?"]),
+    supplier,
+    attachments: mapAttachments(fields["Attachments"]),
+    createdAt:
+      typeof fields["Created time"] === "string"
+        ? fields["Created time"]
+        : record.createdTime ?? null,
+  };
+}
+
+function mapActivityDetail(record: AirtableRecord): RequestActivityDetail {
+  const { fields } = record;
+  const contentRaw = fields["Content"];
+  const content =
+    typeof contentRaw === "string"
+      ? stripHtml(contentRaw)
+      : cleanString(contentRaw);
+
+  const quoteIds = extractRecordIds(fields["Related Quote"]);
+
+  return {
+    id: record.id,
+    activityId: fieldToString(fields["Activity ID"]),
+    content: content || "Activity recorded",
+    channel: cleanString(fields["Channel"]) || "—",
+    direction: cleanString(fields["Direction"]) || "—",
+    createdAt:
+      typeof fields["Created time"] === "string"
+        ? fields["Created time"]
+        : record.createdTime ?? null,
+    relatedQuoteId: quoteIds[0] ?? null,
+  };
+}
+
+function computeSlaProgress(
+  createdAt: string | null,
+  slaBusinessDays: number | null,
+): {
+  daysElapsed: number | null;
+  slaProgressPercent: number | null;
+  isSlaOverdue: boolean;
+} {
+  if (!createdAt || slaBusinessDays == null || slaBusinessDays <= 0) {
+    return {
+      daysElapsed: null,
+      slaProgressPercent: null,
+      isSlaOverdue: false,
+    };
+  }
+
+  const daysElapsed = businessDaysBetween(new Date(createdAt), new Date());
+  const slaProgressPercent = Math.min(
+    100,
+    Math.round((daysElapsed / slaBusinessDays) * 100),
+  );
+
+  return {
+    daysElapsed,
+    slaProgressPercent,
+    isSlaOverdue: daysElapsed > slaBusinessDays,
+  };
+}
+
+export async function getRequestDetailById(
+  id: string,
+): Promise<RequestDetail | null> {
+  if (!isAirtableConfigured()) return null;
+
+  const record = await fetchAirtableRecord(AIRTABLE_REQUESTS_TABLE_ID, id);
+  if (!record) return null;
+
+  const { fields } = record;
+  const usersById = await getUsersNameMap();
+
+  const requestorIds = extractRecordIds(fields["Requestor"]);
+  const requestor =
+    requestorIds
+      .map((userId) => usersById.get(userId) ?? "")
+      .filter((name) => name && name !== "—" && !isPlaceholderPersonName(name))
+      .join(", ") || "—";
+
+  const clientIds = extractRecordIds(fields["Client"]);
+  const supplierIds = extractRecordIds(fields["Suppliers"]);
+  const itemIds = extractRecordIds(fields["Items"]);
+  const quoteIds = extractRecordIds(fields["Supplier Quotes"]);
+  const activityIds = extractRecordIds(fields["Activities"]);
+  const caseManagerIds = extractRecordIds(fields["Case Manager"]);
+
+  const [
+    clientRecords,
+    supplierRecords,
+    itemRecords,
+    quoteRecords,
+    activityRecords,
+    caseManagerRecords,
+  ] = await Promise.all([
+    fetchAirtableRecordsByIds(AIRTABLE_CLIENTS_TABLE_ID, clientIds),
+    fetchAirtableRecordsByIds(AIRTABLE_SUPPLIERS_TABLE_ID, supplierIds),
+    fetchAirtableRecordsByIds(AIRTABLE_ITEMS_TABLE_ID, itemIds),
+    fetchAirtableRecordsByIds(AIRTABLE_QUOTES_TABLE_ID, quoteIds),
+    fetchAirtableRecordsByIds(AIRTABLE_ACTIVITIES_TABLE_ID, activityIds),
+    fetchAirtableRecordsByIds(AIRTABLE_CASE_MANAGERS_TABLE_ID, caseManagerIds),
+  ]);
+
+  const [linkedQuotes, linkedActivities] = await Promise.all([
+    quoteRecords.length === 0
+      ? fetchRecordsLinkedToRequest(AIRTABLE_QUOTES_TABLE_ID, id)
+      : Promise.resolve([] as AirtableRecord[]),
+    activityRecords.length === 0
+      ? fetchRecordsLinkedToRequest(AIRTABLE_ACTIVITIES_TABLE_ID, id)
+      : Promise.resolve([] as AirtableRecord[]),
+  ]);
+
+  const allQuoteRecords =
+    quoteRecords.length > 0 ? quoteRecords : linkedQuotes;
+  const allActivityRecords =
+    activityRecords.length > 0 ? activityRecords : linkedActivities;
+
+  // Ensure suppliers referenced only via quotes are resolvable.
+  const quoteSupplierIds = allQuoteRecords.flatMap((quote) =>
+    extractRecordIds(quote.fields["Related Supplier"]),
+  );
+  const missingSupplierIds = quoteSupplierIds.filter(
+    (supplierId) => !supplierRecords.some((s) => s.id === supplierId),
+  );
+  const extraSuppliers =
+    missingSupplierIds.length > 0
+      ? await fetchAirtableRecordsByIds(
+          AIRTABLE_SUPPLIERS_TABLE_ID,
+          missingSupplierIds,
+        )
+      : [];
+
+  const suppliersById = new Map<string, RequestSupplierSummary>(
+    [...supplierRecords, ...extraSuppliers].map((supplier) => [
+      supplier.id,
+      {
+        id: supplier.id,
+        name:
+          cleanString(supplier.fields["Supplier Name"]) ||
+          cleanString(supplier.fields["Name"]) ||
+          "Unnamed supplier",
+      },
+    ]),
+  );
+
+  const suppliers: RequestSupplierSummary[] = supplierIds.map(
+    (supplierId) =>
+      suppliersById.get(supplierId) ?? {
+        id: supplierId,
+        name: "Unknown supplier",
+      },
+  );
+
+  const quotes = allQuoteRecords
+    .map((quote) => mapQuoteDetail(quote, suppliersById))
+    .sort((a, b) => {
+      if (a.price == null && b.price == null) return 0;
+      if (a.price == null) return 1;
+      if (b.price == null) return -1;
+      return a.price - b.price;
+    });
+
+  const activities = allActivityRecords
+    .map(mapActivityDetail)
+    .sort((a, b) => {
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return bTime - aTime;
+    });
+
+  const caseManagerRecord = caseManagerRecords[0];
+  const caseManager = caseManagerRecord
+    ? {
+        id: caseManagerRecord.id,
+        displayName: getPersonDisplayName(caseManagerRecord.fields),
+      }
+    : null;
+
+  const createdAt =
+    typeof fields["Created time"] === "string"
+      ? fields["Created time"]
+      : record.createdTime ?? null;
+  const lastModifiedAt =
+    typeof fields["Last modified time"] === "string"
+      ? fields["Last modified time"]
+      : null;
+  const slaBusinessDays = toNumberOrNull(fields["SLA (business days)"]);
+  const sla = computeSlaProgress(createdAt, slaBusinessDays);
+
+  const requestIdValue = fields["Request ID"] ?? record.id;
+
+  return {
+    id: record.id,
+    requestId: formatRequestId(fieldToString(requestIdValue)),
+    requestor,
+    status: fieldToString(fields["Status"]),
+    notes: cleanString(fields["Notes"]),
+    slaBusinessDays,
+    createdAt,
+    lastModifiedAt,
+    lastModifiedBy: "—",
+    client: clientRecords[0] ? mapClientSummary(clientRecords[0]) : null,
+    caseManager,
+    suppliers,
+    items: itemRecords.map(mapItemDetail),
+    quotes,
+    activities,
+    ...sla,
+  };
+}
+
+export async function updateQuotePrice(
+  quoteId: string,
+  price: number,
+): Promise<RequestQuoteDetail> {
+  const updated = await updateAirtableRecord(AIRTABLE_QUOTES_TABLE_ID, quoteId, {
+    Price: price,
+    "Is Manually Entered?": true,
+  });
+
+  const supplierIds = extractRecordIds(updated.fields["Related Supplier"]);
+  const supplierRecords = await fetchAirtableRecordsByIds(
+    AIRTABLE_SUPPLIERS_TABLE_ID,
+    supplierIds,
+  );
+  const suppliersById = new Map(
+    supplierRecords.map((supplier) => [
+      supplier.id,
+      {
+        id: supplier.id,
+        name:
+          cleanString(supplier.fields["Supplier Name"]) ||
+          cleanString(supplier.fields["Name"]) ||
+          "Unnamed supplier",
+      } satisfies RequestSupplierSummary,
+    ]),
+  );
+
+  return mapQuoteDetail(updated, suppliersById);
+}
+
+export async function attachQuotePdf(
+  quoteId: string,
+  file: { filename: string; contentType: string; base64: string },
+): Promise<RequestQuoteDetail> {
+  const existing = await fetchAirtableRecord(AIRTABLE_QUOTES_TABLE_ID, quoteId);
+  if (!existing) {
+    throw new Error("Quote not found");
+  }
+
+  const existingAttachments = mapAttachments(existing.fields["Attachments"]);
+  const nextAttachments = [
+    ...existingAttachments.map((attachment) => ({ url: attachment.url })),
+    {
+      url: `data:${file.contentType};base64,${file.base64}`,
+      filename: file.filename,
+    },
+  ];
+
+  const updated = await updateAirtableRecord(AIRTABLE_QUOTES_TABLE_ID, quoteId, {
+    Attachments: nextAttachments,
+  });
+
+  const supplierIds = extractRecordIds(updated.fields["Related Supplier"]);
+  const supplierRecords = await fetchAirtableRecordsByIds(
+    AIRTABLE_SUPPLIERS_TABLE_ID,
+    supplierIds,
+  );
+  const suppliersById = new Map(
+    supplierRecords.map((supplier) => [
+      supplier.id,
+      {
+        id: supplier.id,
+        name:
+          cleanString(supplier.fields["Supplier Name"]) ||
+          cleanString(supplier.fields["Name"]) ||
+          "Unnamed supplier",
+      } satisfies RequestSupplierSummary,
+    ]),
+  );
+
+  return mapQuoteDetail(updated, suppliersById);
 }

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import type { ClientRecord } from "@/lib/clients";
+import { useQuerySelection } from "@/lib/useQuerySelection";
 import { ClientSideSheet } from "./ClientSideSheet";
 import { ClientsTable } from "./ClientsTable";
 
@@ -16,7 +16,7 @@ export function ClientsPageView({
   isConfigured,
   fetchError,
 }: ClientsPageViewProps) {
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [selectedClientId, setSelectedClientId] = useQuerySelection();
   const selectedClient =
     clients.find((client) => client.id === selectedClientId) ?? null;
 
