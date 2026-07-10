@@ -1,7 +1,7 @@
 import { getRequests } from "@/lib/airtable";
 import type { RequestRecord } from "@/lib/requests";
 import {
-  getStatusStyle,
+  getStatusChartColor,
   STATUS_DISPLAY_ORDER,
 } from "@/components/requests/StatusChip";
 import { HomeBanner } from "@/components/home/HomeBanner";
@@ -29,7 +29,7 @@ function buildStatusSlices(requests: RequestRecord[]): StatusSlice[] {
     .map(([label, count]) => ({
       label,
       count,
-      color: getStatusStyle(label).text,
+      color: getStatusChartColor(label),
     }))
     .sort((a, b) => {
       const orderDiff = statusSortIndex(a.label) - statusSortIndex(b.label);

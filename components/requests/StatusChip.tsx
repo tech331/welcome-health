@@ -36,6 +36,32 @@ export function getStatusStyle(status: string): { bg: string; text: string } {
   );
 }
 
+function blendHex(bg: string, text: string, textWeight = 0.42): string {
+  const parse = (hex: string) => {
+    const h = hex.replace("#", "");
+    return [
+      parseInt(h.slice(0, 2), 16),
+      parseInt(h.slice(2, 4), 16),
+      parseInt(h.slice(4, 6), 16),
+    ] as const;
+  };
+
+  const [r1, g1, b1] = parse(bg);
+  const [r2, g2, b2] = parse(text);
+  const bgWeight = 1 - textWeight;
+
+  const toHex = (value: number) =>
+    Math.round(value).toString(16).padStart(2, "0");
+
+  return `#${toHex(r1 * bgWeight + r2 * textWeight)}${toHex(g1 * bgWeight + g2 * textWeight)}${toHex(b1 * bgWeight + b2 * textWeight)}`;
+}
+
+/** Mid-tone colour for charts — between pill background and pill text. */
+export function getStatusChartColor(status: string): string {
+  const { bg, text } = getStatusStyle(status);
+  return blendHex(bg, text);
+}
+
 export function StatusChip({ status }: { status: string }) {
   if (!status || status === "—") {
     return <span className="text-[#2A2A2A]/40">—</span>;
