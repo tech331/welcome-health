@@ -55,8 +55,8 @@ export function StepReview({ state, data }: StepReviewProps) {
       <div className="flex items-start gap-3 rounded-xl border border-[#2d6a4f]/30 bg-[#e8f0eb]/60 p-4">
         <Info className="mt-0.5 h-5 w-5 shrink-0 text-[#2d6a4f]" strokeWidth={1.75} />
         <p className="text-sm text-[#2A2A2A]">
-          By clicking Submit, this request and its item/s will be saved to
-          Airtable with the selected suppliers.
+          By clicking Submit, this request and its items will be created and
+          you should receive a confirmation email shortly.
         </p>
       </div>
 

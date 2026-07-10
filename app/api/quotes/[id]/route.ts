@@ -8,7 +8,7 @@ type RouteContext = {
 export async function PATCH(request: Request, context: RouteContext) {
   if (!isAirtableConfigured()) {
     return NextResponse.json(
-      { error: "Airtable is not configured" },
+      { error: "Service is not configured" },
       { status: 503 },
     );
   }

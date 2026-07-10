@@ -26,7 +26,7 @@ export async function GET(_request: Request, context: RouteContext) {
 
   if (!isAirtableConfigured()) {
     return NextResponse.json(
-      { error: "Airtable is not configured" },
+      { error: "Service is not configured" },
       { status: 503 },
     );
   }

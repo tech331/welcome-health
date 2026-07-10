@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createNewRequest, isAirtableConfigured } from "@/lib/airtable";
+import { sendRequestAcknowledgementEmail } from "@/lib/email/sendAcknowledgementEmail";
 import {
   FOLLOW_UP_OPTIONS,
   type NewRequestItemInput,
@@ -140,7 +141,7 @@ function validatePayload(body: unknown): {
 export async function POST(request: Request) {
   if (!isAirtableConfigured()) {
     return NextResponse.json(
-      { error: "Airtable is not configured." },
+      { error: "Service is not configured." },
       { status: 503 },
     );
   }
@@ -162,11 +163,22 @@ export async function POST(request: Request) {
 
   try {
     const result = await createNewRequest(payload);
+
+    try {
+      await sendRequestAcknowledgementEmail({
+        requestRecordId: result.id,
+        requestId: result.requestId,
+      });
+    } catch (emailError) {
+      console.error("Acknowledgement email failed:", emailError);
+    }
+
     return NextResponse.json(result, { status: 201 });
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Failed to create request";
     console.error("Failed to create request:", err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to create request. Please try again." },
+      { status: 500 },
+    );
   }
 }

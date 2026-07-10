@@ -4,15 +4,15 @@ export function getTableEmptyMessage(
   fetchError?: string | null,
 ): string {
   if (!isConfigured) {
-    return "Connect Airtable by adding your API key to .env.local";
+    return "Data is not available right now. Please try again later.";
   }
 
   if (fetchError?.includes("403")) {
-    return "Airtable access denied — check your token has data.records:read scope and access to this base.";
+    return "You do not have permission to view this data.";
   }
 
   if (fetchError) {
-    return `Could not load ${entity} from Airtable. Check the server logs for details.`;
+    return `Could not load ${entity}. Please try again later.`;
   }
 
   return `No ${entity} found`;

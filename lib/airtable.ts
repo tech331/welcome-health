@@ -1169,6 +1169,23 @@ export async function createNewRequest(
   };
 }
 
+export async function createActivityRecord(params: {
+  requestRecordId: string;
+  channel: string;
+  direction: string;
+  content: string;
+}): Promise<string> {
+  const [record] = await createAirtableRecords(AIRTABLE_ACTIVITIES_TABLE_ID, [
+    {
+      Channel: params.channel,
+      Direction: params.direction,
+      Content: params.content,
+      "Related Request": [params.requestRecordId],
+    },
+  ]);
+  return record.id;
+}
+
 function mapAttachments(value: unknown): RequestAttachment[] {
   if (!Array.isArray(value)) return [];
   const attachments: RequestAttachment[] = [];

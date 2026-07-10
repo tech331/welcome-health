@@ -51,7 +51,7 @@ export default async function RequestDetailPage({
           </h1>
           <p className="mt-4 text-sm text-[#2A2A2A]/60">
             {fetchError
-              ? "Could not load this request from Airtable."
+              ? "Could not load this request. Please try again later."
               : "Request not found."}
           </p>
         </>

@@ -249,8 +249,8 @@ export function NewRequestModal({ onClose }: NewRequestModalProps) {
                 Request {result.requestId} created
               </h3>
               <p className="mt-1 max-w-sm text-sm text-[#2A2A2A]/60">
-                The request has been saved to Airtable with the selected
-                suppliers and items.
+                The request has been created and you should receive an email in
+                your inbox shortly.
               </p>
             </div>
           ) : loadError ? (

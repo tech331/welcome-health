@@ -6,7 +6,7 @@ export const revalidate = 30;
 export async function GET() {
   if (!isAirtableConfigured()) {
     return NextResponse.json(
-      { error: "Airtable is not configured." },
+      { error: "Service is not configured." },
       { status: 503 },
     );
   }
@@ -15,9 +15,10 @@ export async function GET() {
     const data = await getRequestFormData();
     return NextResponse.json(data);
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to load form data";
     console.error("Failed to load request form data:", error);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to load form data. Please try again." },
+      { status: 500 },
+    );
   }
 }
