@@ -27,13 +27,8 @@ export function ItemsRequestedTable({ items }: ItemsRequestedTableProps) {
         <tbody>
           {items.map((item) => (
             <tr key={item.id} className="odd:bg-white even:bg-[#faf8f5]">
-              <td className="px-3 py-3 align-top">
-                <div className="font-medium text-[#1a1a1a]">{item.name}</div>
-                {item.itemId !== "—" && (
-                  <div className="mt-0.5 text-xs text-[#606060]">
-                    #{item.itemId}
-                  </div>
-                )}
+              <td className="px-3 py-3 align-top font-medium text-[#1a1a1a]">
+                {item.name}
               </td>
               <td className="px-3 py-3 align-top text-[#1a1a1a]">
                 {item.category || "—"}

@@ -49,7 +49,21 @@ export function NewRequestModal({ onClose }: NewRequestModalProps) {
         return response.json() as Promise<RequestFormData>;
       })
       .then((data) => {
-        if (!cancelled) setFormData(data);
+        if (cancelled) return;
+        setFormData(data);
+        // Requestor is auto-assigned at random for now; pick one up front so it
+        // can be shown read-only on the review step and saved with the request.
+        if (data.requestors.length > 0) {
+          const randomRequestor =
+            data.requestors[
+              Math.floor(Math.random() * data.requestors.length)
+            ];
+          setState((prev) =>
+            prev.requestorId
+              ? prev
+              : { ...prev, requestorId: randomRequestor.id },
+          );
+        }
       })
       .catch((error: unknown) => {
         if (!cancelled) {

@@ -1,8 +1,9 @@
 "use client";
 
-import type { CaseManagerRecord } from "@/lib/caseManagers";
+import { useEffect } from "react";
+import type { CaseManagerDetail, CaseManagerRecord } from "@/lib/caseManagers";
 import { useQuerySelection } from "@/lib/useQuerySelection";
-import { CaseManagerSideSheet } from "./CaseManagerSideSheet";
+import { useRelatedRecords } from "@/components/related-records/RelatedRecordProvider";
 import { CaseManagersTable } from "./CaseManagersTable";
 
 type CaseManagersPageViewProps = {
@@ -17,27 +18,66 @@ export function CaseManagersPageView({
   fetchError,
 }: CaseManagersPageViewProps) {
   const [selectedId, setSelectedId] = useQuerySelection();
+  const { openCaseManager, close, activeRecord } = useRelatedRecords();
 
-  const selected =
-    caseManagers.find((manager) => manager.id === selectedId) ?? null;
+  useEffect(() => {
+    if (!selectedId) return;
+    const selectedManager = caseManagers.find((manager) => manager.id === selectedId);
+    const prefetched =
+      selectedManager == null
+        ? undefined
+        : ({
+            id: selectedManager.id,
+            displayName: selectedManager.displayName,
+            status: "—",
+            email: selectedManager.email,
+            phone: selectedManager.phone,
+            payer: selectedManager.payer && selectedManager.payer !== "—"
+              ? { id: "", name: selectedManager.payer }
+              : null,
+            relatedRequests: [],
+            relatedClients: [],
+          } satisfies CaseManagerDetail);
+    openCaseManager(selectedId, prefetched);
+  }, [caseManagers, openCaseManager, selectedId]);
+
+  const activeId =
+    activeRecord?.type === "caseManager" ? activeRecord.id : null;
 
   return (
-    <div className="flex h-full w-full min-h-0 overflow-hidden">
-      <div className="min-w-0 flex-1 overflow-y-auto px-8 pb-8 pt-8">
-        <h1 className="mb-6 font-sans text-2xl font-semibold text-[#2A2A2A]">
-          Case Managers
-        </h1>
-        <CaseManagersTable
-          caseManagers={caseManagers}
-          isConfigured={isConfigured}
-          fetchError={fetchError}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-        />
-      </div>
-      <CaseManagerSideSheet
-        caseManager={selected}
-        onClose={() => setSelectedId(null)}
+    <div className="h-full overflow-y-auto px-8 pb-8 pt-8">
+      <h1 className="mb-6 font-sans text-2xl font-semibold text-[#2A2A2A]">
+        Case Managers
+      </h1>
+      <CaseManagersTable
+        caseManagers={caseManagers}
+        isConfigured={isConfigured}
+        fetchError={fetchError}
+        selectedId={activeId}
+        onSelect={(id) => {
+          setSelectedId(id);
+          if (!id) {
+            close();
+            return;
+          }
+          const selectedManager = caseManagers.find((manager) => manager.id === id);
+          const prefetched =
+            selectedManager == null
+              ? undefined
+              : ({
+                  id: selectedManager.id,
+                  displayName: selectedManager.displayName,
+                  status: "—",
+                  email: selectedManager.email,
+                  phone: selectedManager.phone,
+                  payer: selectedManager.payer && selectedManager.payer !== "—"
+                    ? { id: "", name: selectedManager.payer }
+                    : null,
+                  relatedRequests: [],
+                  relatedClients: [],
+                } satisfies CaseManagerDetail);
+          openCaseManager(id, prefetched);
+        }}
       />
     </div>
   );

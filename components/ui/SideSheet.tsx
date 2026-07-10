@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import Link from "next/link";
+import { ChevronRight, X } from "lucide-react";
 
 const PANEL_TRANSITION_MS = 300;
 
@@ -10,6 +11,8 @@ type SideSheetProps<T> = {
   onClose: () => void;
   title: (record: T) => string;
   width?: "w-80" | "w-96";
+  listHref?: string;
+  listLabel?: string;
   children: (record: T) => React.ReactNode;
 };
 
@@ -18,6 +21,8 @@ export function SideSheet<T>({
   onClose,
   title,
   width = "w-96",
+  listHref,
+  listLabel,
   children,
 }: SideSheetProps<T>) {
   const isOpen = record !== null;
@@ -55,10 +60,31 @@ export function SideSheet<T>({
     >
       {displayRecord && (
         <div className={`flex h-full flex-col ${width}`}>
-          <div className="flex h-14 shrink-0 items-center justify-between border-b border-gray-200 px-4">
-            <h2 className="truncate text-base font-semibold text-[#2A2A2A]">
-              {title(displayRecord)}
-            </h2>
+          <div className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-200 px-4 py-3">
+            <div className="min-w-0 flex-1">
+              {listHref && listLabel ? (
+                <nav className="flex min-w-0 items-center gap-1 text-xs text-[#606060]">
+                  <Link
+                    href={listHref}
+                    className="shrink-0 transition-colors hover:text-[#2d6a4f]"
+                  >
+                    {listLabel}
+                  </Link>
+                  <ChevronRight
+                    className="h-3.5 w-3.5 shrink-0"
+                    strokeWidth={1.75}
+                    aria-hidden="true"
+                  />
+                  <span className="truncate text-sm font-semibold text-[#2A2A2A]">
+                    {title(displayRecord)}
+                  </span>
+                </nav>
+              ) : (
+                <h2 className="truncate text-base font-semibold text-[#2A2A2A]">
+                  {title(displayRecord)}
+                </h2>
+              )}
+            </div>
             <button
               type="button"
               onClick={onClose}

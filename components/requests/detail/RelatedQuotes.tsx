@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { RelatedRecordLink } from "@/components/related-records/RelatedRecordLink";
 import { ReceiptText } from "lucide-react";
 import type {
   RequestAttachment,
@@ -88,12 +88,13 @@ export function RelatedQuotes({ quotes }: RelatedQuotesProps) {
                 </div>
                 <div className="text-sm text-[#2A2A2A]/70">
                   {quote.supplier ? (
-                    <Link
-                      href={`/suppliers?selected=${quote.supplier.id}`}
+                    <RelatedRecordLink
+                      type="supplier"
+                      id={quote.supplier.id}
                       className="text-[#2d6a4f] underline-offset-2 transition-colors hover:text-[#245a42] hover:underline"
                     >
                       {quote.supplier.name}
-                    </Link>
+                    </RelatedRecordLink>
                   ) : (
                     <span className="text-[#2A2A2A]/40">No supplier</span>
                   )}

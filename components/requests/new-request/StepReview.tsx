@@ -62,7 +62,17 @@ export function StepReview({ state, data }: StepReviewProps) {
 
       {requestor && (
         <SummarySection title="Requestor">
-          <SummaryRow label="Name" value={requestor.name} />
+          <SummaryRow
+            label="Name"
+            value={
+              <span className="inline-flex items-center gap-2">
+                {requestor.name}
+                <span className="rounded-full bg-[#f0eee9] px-2 py-0.5 text-xs font-medium text-[#2A2A2A]/60">
+                  Auto-assigned
+                </span>
+              </span>
+            }
+          />
         </SummarySection>
       )}
 

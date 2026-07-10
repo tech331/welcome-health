@@ -1,7 +1,9 @@
 "use client";
 
 import { type Dispatch, type SetStateAction } from "react";
-import { AU_STATES, FUNDING_TYPES, type RequestFormData } from "@/lib/requestForm";
+import { FUNDING_TYPES, type RequestFormData } from "@/lib/requestForm";
+import type { ParsedAddress } from "@/lib/googleMaps";
+import { AddressAutocomplete } from "./AddressAutocomplete";
 import { Combobox } from "./Combobox";
 import { SelectField, TextField } from "./fields";
 import {
@@ -26,6 +28,20 @@ export function StepClient({ state, setState, errors, data }: StepClientProps) {
     setState((prev) => ({
       ...prev,
       newClient: { ...prev.newClient, [key]: value },
+    }));
+  }
+
+  function populateAddress(parsed: ParsedAddress) {
+    setState((prev) => ({
+      ...prev,
+      newClient: {
+        ...prev.newClient,
+        addressLine1: parsed.addressLine1,
+        addressLine2: parsed.addressLine2,
+        city: parsed.city,
+        state: parsed.state,
+        postcode: parsed.postcode,
+      },
     }));
   }
 
@@ -55,52 +71,45 @@ export function StepClient({ state, setState, errors, data }: StepClientProps) {
     label: cm.name,
   }));
 
-  const requestorOptions = data.requestors.map((requestor) => ({
-    value: requestor.id,
-    label: requestor.name,
-  }));
-
   const isNew = state.clientMode === "new";
 
   return (
     <div className="space-y-6">
-      <Combobox
-        id="requestor"
-        label="Requestor"
-        optional
-        value={state.requestorId}
-        onChange={(value) =>
-          setState((prev) => ({ ...prev, requestorId: value }))
-        }
-        options={requestorOptions}
-        placeholder="Who is submitting this request?"
-        emptyMessage="No clinicians found"
-      />
-
-      <div className="border-t border-gray-100 pt-6">
+      <div>
         <Combobox
           id="existing-client"
           label="Client"
           required={!isNew}
           value={state.existingClientId}
           onChange={(value) =>
-            setState((prev) => ({ ...prev, existingClientId: value }))
+            setState((prev) => ({
+              ...prev,
+              existingClientId: value,
+              // Selecting an existing client cancels new-client creation.
+              clientMode: value ? "existing" : prev.clientMode,
+              newClient: value ? createEmptyClient() : prev.newClient,
+            }))
           }
           options={clientOptions}
           placeholder="Search clients by name…"
           emptyMessage="No clients found"
           error={isNew ? undefined : errors.existingClientId}
+          createLabel="Create new client"
+          onCreate={() => setMode("new")}
         />
 
-        <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-[#2A2A2A]">
-          <input
-            type="checkbox"
-            checked={isNew}
-            onChange={(event) => setMode(event.target.checked ? "new" : "existing")}
-            className="h-4 w-4 rounded border-gray-300 text-[#2d6a4f] focus:ring-[#2d6a4f]"
-          />
-          Create new client
-        </label>
+        {isNew && (
+          <div className="mt-3 flex items-center justify-between rounded-lg bg-[#e8f0eb]/60 px-3 py-2 text-sm text-[#2d6a4f]">
+            <span className="font-medium">Creating a new client</span>
+            <button
+              type="button"
+              onClick={() => setMode("existing")}
+              className="text-xs font-medium text-[#2d6a4f] underline-offset-2 hover:underline"
+            >
+              Search instead
+            </button>
+          </div>
+        )}
       </div>
 
       {isNew && (
@@ -159,53 +168,18 @@ export function StepClient({ state, setState, errors, data }: StepClientProps) {
             error={errors.fundingType}
           />
 
-          <div className="space-y-4 rounded-lg bg-[#faf8f5] p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[#2A2A2A]/50">
-              Address
-            </p>
-            <TextField
-              id="addressLine1"
-              label="Address line 1"
-              required
-              value={state.newClient.addressLine1}
-              onChange={(value) => setClientField("addressLine1", value)}
-              error={errors.addressLine1}
-            />
-            <TextField
-              id="addressLine2"
-              label="Address line 2"
-              optional
-              value={state.newClient.addressLine2}
-              onChange={(value) => setClientField("addressLine2", value)}
-            />
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <TextField
-                id="city"
-                label="City"
-                required
-                value={state.newClient.city}
-                onChange={(value) => setClientField("city", value)}
-                error={errors.city}
-              />
-              <SelectField
-                id="state"
-                label="State"
-                required
-                value={state.newClient.state}
-                onChange={(value) => setClientField("state", value)}
-                options={AU_STATES.map((s) => ({ value: s, label: s }))}
-                error={errors.state}
-              />
-              <TextField
-                id="postcode"
-                label="Postcode"
-                required
-                value={state.newClient.postcode}
-                onChange={(value) => setClientField("postcode", value)}
-                error={errors.postcode}
-              />
-            </div>
-          </div>
+          <AddressAutocomplete
+            value={{
+              addressLine1: state.newClient.addressLine1,
+              addressLine2: state.newClient.addressLine2,
+              city: state.newClient.city,
+              state: state.newClient.state,
+              postcode: state.newClient.postcode,
+            }}
+            onFieldChange={(key, value) => setClientField(key, value)}
+            onPopulate={populateAddress}
+            errors={errors}
+          />
 
           <Combobox
             id="caseManager"

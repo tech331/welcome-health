@@ -1,8 +1,11 @@
+"use client";
+
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Building2, ChevronRight } from "lucide-react";
 import type { RequestDetail } from "@/lib/requestDetail";
 import { formatDateTime } from "@/lib/format";
+import { RelatedRecordLink } from "@/components/related-records/RelatedRecordLink";
 import { RequestStageMetroline } from "./RequestStageMetroline";
 import { RequestMetrics } from "./RequestMetrics";
 import { RelatedQuotes } from "./RelatedQuotes";
@@ -112,17 +115,18 @@ export function RequestDetailView({ request }: RequestDetailViewProps) {
                       <ul className="space-y-1.5">
                         {request.suppliers.map((supplier) => (
                           <li key={supplier.id}>
-                            <Link
-                              href={`/suppliers?selected=${supplier.id}`}
-                              className="group inline-flex items-center gap-1.5 text-sm text-[#2d6a4f] underline-offset-2 hover:underline"
+                            <RelatedRecordLink
+                              type="supplier"
+                              id={supplier.id}
+                              className="group flex w-full items-start gap-2 text-left text-sm text-[#2d6a4f] underline-offset-2 hover:underline"
                             >
                               <Building2
-                                className="h-3.5 w-3.5 text-[#6f9a85]"
+                                className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#6f9a85]"
                                 strokeWidth={1.75}
                                 aria-hidden="true"
                               />
-                              {supplier.name}
-                            </Link>
+                              <span>{supplier.name}</span>
+                            </RelatedRecordLink>
                           </li>
                         ))}
                       </ul>
@@ -135,9 +139,10 @@ export function RequestDetailView({ request }: RequestDetailViewProps) {
                 <CardTitle>People</CardTitle>
                 <div className="space-y-4">
                   {request.client ? (
-                    <Link
-                      href={`/clients?selected=${request.client.id}`}
-                      className="group -mx-2 flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-[#2d6a4f]/[0.06]"
+                    <RelatedRecordLink
+                      type="client"
+                      id={request.client.id}
+                      className="group -mx-2 flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-[#2d6a4f]/[0.06]"
                     >
                       <span className="min-w-0">
                         <span className="block truncate text-base font-semibold text-[#1a1a1a]">
@@ -154,7 +159,7 @@ export function RequestDetailView({ request }: RequestDetailViewProps) {
                         strokeWidth={1.75}
                         aria-hidden="true"
                       />
-                    </Link>
+                    </RelatedRecordLink>
                   ) : (
                     <p className="text-sm text-[#606060]">No client linked</p>
                   )}
@@ -164,8 +169,9 @@ export function RequestDetailView({ request }: RequestDetailViewProps) {
                       <div className="text-xs font-medium text-[#606060]">
                         Case manager
                       </div>
-                      <Link
-                        href={`/case-managers?selected=${request.caseManager.id}`}
+                      <RelatedRecordLink
+                        type="caseManager"
+                        id={request.caseManager.id}
                         className="group mt-1 inline-flex items-center gap-1 text-sm font-medium text-[#2d6a4f] underline-offset-2 hover:underline"
                       >
                         {request.caseManager.displayName}
@@ -174,7 +180,7 @@ export function RequestDetailView({ request }: RequestDetailViewProps) {
                           strokeWidth={1.75}
                           aria-hidden="true"
                         />
-                      </Link>
+                      </RelatedRecordLink>
                     </div>
                   ) : null}
                 </div>

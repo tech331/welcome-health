@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, Search, X } from "lucide-react";
+import { Check, ChevronDown, Plus, Search, X } from "lucide-react";
 import { FieldError, FieldLabel } from "./fields";
 
 export type ComboboxOption = {
@@ -21,6 +21,9 @@ type ComboboxProps = {
   required?: boolean;
   optional?: boolean;
   error?: string;
+  /** When provided, renders an action at the bottom of the dropdown. */
+  createLabel?: string;
+  onCreate?: () => void;
 };
 
 export function Combobox({
@@ -34,6 +37,8 @@ export function Combobox({
   required,
   optional,
   error,
+  createLabel,
+  onCreate,
 }: ComboboxProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -84,6 +89,12 @@ export function Combobox({
     onChange(optionValue);
     setOpen(false);
     setQuery("");
+  }
+
+  function handleCreate() {
+    setOpen(false);
+    setQuery("");
+    onCreate?.();
   }
 
   function handleKeyDown(event: React.KeyboardEvent) {
@@ -199,6 +210,19 @@ export function Combobox({
                 </li>
               );
             })
+          )}
+
+          {onCreate && createLabel && (
+            <li className="mt-1 border-t border-gray-100 pt-1">
+              <button
+                type="button"
+                onClick={handleCreate}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-[#2d6a4f] transition-colors hover:bg-[#e8f0eb]"
+              >
+                <Plus className="h-4 w-4 shrink-0" strokeWidth={2} />
+                {createLabel}
+              </button>
+            </li>
           )}
         </ul>
       )}

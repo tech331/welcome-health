@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import type { CaseManagerContact } from "@/lib/clients";
+import { RelatedRecordLink } from "@/components/related-records/RelatedRecordLink";
 
 type CaseManagerCellProps = {
   caseManager: CaseManagerContact | null;
@@ -13,12 +13,12 @@ export function CaseManagerCell({ caseManager }: CaseManagerCellProps) {
   }
 
   return (
-    <Link
-      href={`/case-managers?selected=${caseManager.id}`}
-      onClick={(event) => event.stopPropagation()}
+    <RelatedRecordLink
+      type="caseManager"
+      id={caseManager.id}
       className="text-left text-[#2d6a4f] underline-offset-2 transition-colors hover:text-[#245a42] hover:underline"
     >
       {caseManager.displayName}
-    </Link>
+    </RelatedRecordLink>
   );
 }

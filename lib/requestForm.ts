@@ -27,7 +27,16 @@ export const ITEM_CATEGORIES = [
   "Other",
 ] as const;
 
-export const AU_STATES = ["VIC", "NSW", "SA", "QLD", "WA", "TAS"] as const;
+export const AU_STATES = [
+  "VIC",
+  "NSW",
+  "SA",
+  "QLD",
+  "WA",
+  "TAS",
+  "NT",
+  "ACT",
+] as const;
 
 // "How often would you like to follow up suppliers" -> Requests.SLA (business days)
 export const FOLLOW_UP_OPTIONS = [1, 2, 3, 5, 7, 10, 14] as const;

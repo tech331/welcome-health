@@ -42,6 +42,17 @@
     color: #2d6a4f;
   }
 
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      #ece7e1 25%,
+      #f6f2ee 50%,
+      #ece7e1 75%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  }
+
   .nav-link-icon {
     transition: transform 0.25s cubic-bezier(0.34, 1.4, 0.64, 1);
   }
@@ -54,5 +65,20 @@
   a:active .nav-link-icon {
     transform: scale(1.04);
     transition-duration: 0.1s;
+  }
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
   }
 }

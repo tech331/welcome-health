@@ -1,4 +1,4 @@
-import type { CaseManagerRecord } from "./caseManagers";
+import type { CaseManagerDetail, CaseManagerRecord } from "./caseManagers";
 import type { CaseManagerContact, ClientRecord } from "./clients";
 import { businessDaysBetween, formatRequestId } from "./format";
 import {
@@ -130,7 +130,7 @@ async function fetchAirtableRecord(
     )}/${recordId}`,
     {
       headers: { Authorization: `Bearer ${apiKey}` },
-      cache: "no-store",
+      next: { revalidate: AIRTABLE_REVALIDATE_SECONDS },
     },
   );
 
@@ -246,7 +246,7 @@ async function fetchAirtableRecordsByIds(
 
     const response = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${apiKey}` },
-      cache: "no-store",
+      next: { revalidate: AIRTABLE_REVALIDATE_SECONDS },
     });
 
     if (!response.ok) {
@@ -279,10 +279,37 @@ async function fetchRecordsLinkedToRequest(
 
   const response = await fetch(url.toString(), {
     headers: { Authorization: `Bearer ${apiKey}` },
-    cache: "no-store",
+    next: { revalidate: AIRTABLE_REVALIDATE_SECONDS },
   });
 
   if (!response.ok) return [];
+  const data = (await response.json()) as AirtableListResponse;
+  return data.records;
+}
+
+async function fetchAirtableRecordsByFormula(
+  tableId: string,
+  formula: string,
+): Promise<AirtableRecord[]> {
+  const apiKey = getApiKey();
+  if (!apiKey) return [];
+
+  const url = new URL(
+    `${AIRTABLE_API_URL}/${AIRTABLE_BASE_ID}/${encodeURIComponent(tableId)}`,
+  );
+  url.searchParams.set("filterByFormula", formula);
+
+  const response = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${apiKey}` },
+    next: { revalidate: AIRTABLE_REVALIDATE_SECONDS },
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Airtable request failed (${response.status}): ${await response.text()}`,
+    );
+  }
+
   const data = (await response.json()) as AirtableListResponse;
   return data.records;
 }
@@ -444,12 +471,22 @@ function mapRequestRecord(
   const clientField =
     fields["Client"] ?? fields["Related Client"] ?? fields["client"];
 
+  const createdAt =
+    typeof fields["Created time"] === "string"
+      ? fields["Created time"]
+      : record.createdTime ?? null;
+  const slaBusinessDays = toNumberOrNull(fields["SLA (business days)"]);
+  const sla = computeSlaProgress(createdAt, slaBusinessDays);
+
   return {
     id: record.id,
     requestId: formatRequestId(fieldToString(requestId)),
     requestor,
     status: fieldToString(status),
     clientIds: extractRecordIds(clientField),
+    createdAt,
+    slaBusinessDays,
+    ...sla,
   };
 }
 
@@ -712,6 +749,121 @@ export async function getCaseManagers(): Promise<CaseManagerRecord[]> {
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
 
+export async function getClientById(id: string): Promise<ClientRecord | null> {
+  if (!isAirtableConfigured()) return null;
+
+  const record = await fetchAirtableRecord(AIRTABLE_CLIENTS_TABLE_ID, id);
+  if (!record) return null;
+
+  const caseManagerIds = extractRecordIds(
+    record.fields["Case Manager"] ?? record.fields["case_manager"],
+  );
+  const [caseManagerRecords, requestRecords] = await Promise.all([
+    fetchAirtableRecordsByIds(AIRTABLE_CASE_MANAGERS_TABLE_ID, caseManagerIds),
+    fetchAirtableRecordsByFormula(
+      AIRTABLE_REQUESTS_TABLE_ID,
+      `FIND('${id}', ARRAYJOIN({Client}))`,
+    ),
+  ]);
+  const caseManagers = new Map(
+    caseManagerRecords.map((item) => [item.id, mapCaseManagerRecord(item)]),
+  );
+  const requestsByClient = new Map<string, RequestRecord[]>([
+    [id, requestRecords.map((item) => mapRequestRecord(item))],
+  ]);
+
+  return mapClientRecord(record, requestsByClient, caseManagers);
+}
+
+export async function getCaseManagerDetailById(
+  id: string,
+): Promise<CaseManagerDetail | null> {
+  if (!isAirtableConfigured()) return null;
+
+  const record = await fetchAirtableRecord(AIRTABLE_CASE_MANAGERS_TABLE_ID, id);
+  if (!record) return null;
+
+  const { fields } = record;
+  const payerNames = await getPayerNamesMap();
+  const base = mapCaseManagerFullRecord(record, payerNames);
+
+  const payerField = pickField(fields, [
+    "Payer",
+    "Payers",
+    "Related Payer",
+    "Related Payers",
+  ]);
+  const payerIds = extractRecordIds(payerField);
+  const payer =
+    payerIds.length > 0
+      ? {
+          id: payerIds[0],
+          name: payerNames.get(payerIds[0]) ?? base.payer,
+        }
+      : base.payer && base.payer !== "—"
+        ? { id: "", name: base.payer }
+        : null;
+
+  const status = fieldToString(pickField(fields, ["Status", "status"]));
+
+  const [clientRecords, requestRecords] = await Promise.all([
+    fetchAirtableRecordsByFormula(
+      AIRTABLE_CLIENTS_TABLE_ID,
+      `FIND('${id}', ARRAYJOIN({Case Manager}))`,
+    ),
+    fetchAirtableRecordsByFormula(
+      AIRTABLE_REQUESTS_TABLE_ID,
+      `FIND('${id}', ARRAYJOIN({Case Manager}))`,
+    ),
+  ]);
+
+  const relatedClients = clientRecords
+    .filter((client) =>
+      extractRecordIds(client.fields["Case Manager"]).includes(id),
+    )
+    .map((client) => ({
+      id: client.id,
+      displayName: getClientDisplayName(client.fields),
+    }))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+  const relatedRequests = requestRecords
+    .filter((request) =>
+      extractRecordIds(request.fields["Case Manager"]).includes(id),
+    )
+    .map((request) => ({
+      id: request.id,
+      requestId: formatRequestId(
+        fieldToString(request.fields["Request ID"] ?? request.id),
+      ),
+      status: fieldToString(request.fields["Status"]),
+    }))
+    .sort((a, b) => a.requestId.localeCompare(b.requestId));
+
+  return {
+    id: base.id,
+    displayName: base.displayName,
+    status,
+    email: base.email,
+    phone: base.phone,
+    payer,
+    relatedRequests,
+    relatedClients,
+  };
+}
+
+export async function getSupplierById(
+  id: string,
+): Promise<SupplierRecord | null> {
+  if (!isAirtableConfigured()) return null;
+
+  const record = await fetchAirtableRecord(AIRTABLE_SUPPLIERS_TABLE_ID, id);
+  if (!record) return null;
+
+  const payerNames = await getPayerNamesMap();
+  return mapSupplierFullRecord(record, payerNames);
+}
+
 function mapSupplierFullRecord(
   record: AirtableRecord,
   payerNames: Map<string, string>,
@@ -919,6 +1071,13 @@ async function createClientRecord(data: NewClientInput): Promise<string> {
   return created.id;
 }
 
+async function getRandomRequestorId(): Promise<string | null> {
+  const records = await fetchAirtableRecords(AIRTABLE_USERS_TABLE_ID);
+  if (records.length === 0) return null;
+  const random = records[Math.floor(Math.random() * records.length)];
+  return random.id;
+}
+
 async function resolveClientCaseManager(
   clientRecordId: string,
 ): Promise<{ caseManagerId: string | null; payerIds: string[] }> {
@@ -964,7 +1123,8 @@ export async function createNewRequest(
     Status: NEW_REQUEST_STATUS,
     "SLA (business days)": payload.followUpBusinessDays,
   };
-  if (payload.requestorId) requestFields["Requestor"] = [payload.requestorId];
+  const requestorId = payload.requestorId ?? (await getRandomRequestorId());
+  if (requestorId) requestFields["Requestor"] = [requestorId];
   if (caseManagerId) requestFields["Case Manager"] = [caseManagerId];
   if (payload.supplierIds.length > 0) {
     requestFields["Suppliers"] = payload.supplierIds;
@@ -1061,7 +1221,10 @@ function mapItemDetail(record: AirtableRecord): RequestItemDetail {
   return {
     id: record.id,
     itemId: fieldToString(fields["Item ID"]),
-    name: cleanString(fields["Name"]) || "Untitled item",
+    name:
+      cleanString(
+        pickField(fields, ["Item Name", "Name", "name", "Item"]),
+      ) || "Untitled item",
     category: cleanString(fields["Category"]),
     quantity: toNumberOrNull(fields["Quantity"]),
     url: cleanString(fields["URL"]),

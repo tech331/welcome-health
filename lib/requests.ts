@@ -4,6 +4,11 @@ export type RequestRecord = {
   requestor: string;
   status: string;
   clientIds: string[];
+  createdAt: string | null;
+  slaBusinessDays: number | null;
+  daysElapsed: number | null;
+  slaProgressPercent: number | null;
+  isSlaOverdue: boolean;
 };
 
 export type RequestTab = "all" | "open" | "closed" | "overdue";

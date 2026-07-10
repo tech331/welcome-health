@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getRequestFormData, isAirtableConfigured } from "@/lib/airtable";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 export async function GET() {
   if (!isAirtableConfigured()) {

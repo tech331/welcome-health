@@ -1,5 +1,6 @@
 const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
   Draft: { bg: "#ede8e3", text: "#6b6b6b" },
+  Active: { bg: "#dff0e4", text: "#2d6a4f" },
   "Quote Requested": { bg: "#dbe7fb", text: "#274b8a" },
   "Quote Received": { bg: "#fdeecf", text: "#8a6a1f" },
   Open: { bg: "#dbe7fb", text: "#274b8a" },
@@ -17,7 +18,11 @@ export function StatusChip({ status }: { status: string }) {
     return <span className="text-[#2A2A2A]/40">—</span>;
   }
 
-  const style = STATUS_STYLES[status] ?? DEFAULT_STYLE;
+  const style =
+    STATUS_STYLES[status] ??
+    (status.trim().toLowerCase() === "active"
+      ? STATUS_STYLES.Active
+      : DEFAULT_STYLE);
 
   return (
     <span

@@ -1,5 +1,5 @@
 import { TableSkeleton } from "@/components/TableSkeleton";
 
 export default function Loading() {
-  return <TableSkeleton title="Requests" columns={3} />;
+  return <TableSkeleton title="Requests" columns={5} />;
 }

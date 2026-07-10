@@ -8,6 +8,8 @@ import { SideSheet } from "@/components/ui/SideSheet";
 type SupplierSideSheetProps = {
   supplier: SupplierRecord | null;
   onClose: () => void;
+  listHref?: string;
+  listLabel?: string;
 };
 
 function normalizeUrl(url: string): string {
@@ -17,12 +19,16 @@ function normalizeUrl(url: string): string {
 export function SupplierSideSheet({
   supplier,
   onClose,
+  listHref,
+  listLabel,
 }: SupplierSideSheetProps) {
   return (
     <SideSheet
       record={supplier}
       onClose={onClose}
       title={(record) => record.name}
+      listHref={listHref}
+      listLabel={listLabel}
     >
       {(record) => {
         const addressLines = formatAddressLines({

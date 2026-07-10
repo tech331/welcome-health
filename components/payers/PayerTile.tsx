@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Mail, Phone, Shield, Truck } from "lucide-react";
 import { getAvatarColor, type PayerRecord } from "@/lib/payers";
+import { RelatedRecordLink } from "@/components/related-records/RelatedRecordLink";
 
 function Stat({ value, label }: { value: number; label: string }) {
   return (
@@ -14,11 +14,29 @@ function Stat({ value, label }: { value: number; label: string }) {
   );
 }
 
-export function PayerTile({ payer }: { payer: PayerRecord }) {
-  const [expanded, setExpanded] = useState(false);
+type PayerTileProps = {
+  payer: PayerRecord;
+  defaultExpanded?: boolean;
+};
+
+export function PayerTile({ payer, defaultExpanded = false }: PayerTileProps) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const tileRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setExpanded(defaultExpanded);
+  }, [defaultExpanded]);
+
+  useEffect(() => {
+    if (!defaultExpanded || !tileRef.current) return;
+    tileRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [defaultExpanded]);
 
   return (
-    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+    <div
+      ref={tileRef}
+      className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm"
+    >
       <button
         type="button"
         onClick={() => setExpanded((current) => !current)}
@@ -82,8 +100,9 @@ export function PayerTile({ payer }: { payer: PayerRecord }) {
                     key={supplier.id}
                     className="flex items-center justify-between text-sm"
                   >
-                    <Link
-                      href={`/suppliers?selected=${supplier.id}`}
+                    <RelatedRecordLink
+                      type="supplier"
+                      id={supplier.id}
                       className="flex items-center gap-2 text-[#2d6a4f] underline-offset-2 transition-colors hover:text-[#245a42] hover:underline"
                     >
                       <Truck
@@ -91,7 +110,7 @@ export function PayerTile({ payer }: { payer: PayerRecord }) {
                         strokeWidth={1.75}
                       />
                       {supplier.name}
-                    </Link>
+                    </RelatedRecordLink>
                     {supplier.detail && (
                       <span className="text-[#2A2A2A]/50">
                         {supplier.detail}
@@ -127,7 +146,13 @@ export function PayerTile({ payer }: { payer: PayerRecord }) {
                       >
                         {manager.initials}
                       </span>
-                      {manager.displayName}
+                      <RelatedRecordLink
+                        type="caseManager"
+                        id={manager.id}
+                        className="text-left text-[#2d6a4f] underline-offset-2 transition-colors hover:text-[#245a42] hover:underline"
+                      >
+                        {manager.displayName}
+                      </RelatedRecordLink>
                     </li>
                   );
                 })}

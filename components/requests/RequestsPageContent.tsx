@@ -52,9 +52,7 @@ function RequestsPageContentInner({
 export function RequestsPageContent(props: RequestsPageContentProps) {
   return (
     <Suspense
-      fallback={
-        <div className="mb-6 h-10 animate-pulse rounded bg-[#ede8e3]" />
-      }
+      fallback={<div className="skeleton mb-6 h-10 rounded" />}
     >
       <RequestsPageContentInner {...props} />
     </Suspense>

@@ -5,18 +5,28 @@ import { type ClientRecord } from "@/lib/clients";
 import { formatAddressLines } from "@/lib/format";
 import { DetailRow, DetailValue } from "@/components/ui/DetailRow";
 import { SideSheet } from "@/components/ui/SideSheet";
+import { RelatedRecordLink } from "@/components/related-records/RelatedRecordLink";
 
 type ClientSideSheetProps = {
   client: ClientRecord | null;
   onClose: () => void;
+  listHref?: string;
+  listLabel?: string;
 };
 
-export function ClientSideSheet({ client, onClose }: ClientSideSheetProps) {
+export function ClientSideSheet({
+  client,
+  onClose,
+  listHref,
+  listLabel,
+}: ClientSideSheetProps) {
   return (
     <SideSheet
       record={client}
       onClose={onClose}
       title={(record) => record.displayName}
+      listHref={listHref}
+      listLabel={listLabel}
     >
       {(record) => {
         const addressLines = formatAddressLines({
@@ -49,12 +59,13 @@ export function ClientSideSheet({ client, onClose }: ClientSideSheetProps) {
             <div className="border-t border-gray-100 pt-5">
               <DetailRow label="Case Manager">
                 {record.caseManager ? (
-                  <Link
-                    href={`/case-managers?selected=${record.caseManager.id}`}
-                    className="text-[#2d6a4f] underline-offset-2 transition-colors hover:text-[#245a42] hover:underline"
+                  <RelatedRecordLink
+                    type="caseManager"
+                    id={record.caseManager.id}
+                    className="text-left text-[#2d6a4f] underline-offset-2 transition-colors hover:text-[#245a42] hover:underline"
                   >
                     {record.caseManager.displayName}
-                  </Link>
+                  </RelatedRecordLink>
                 ) : (
                   <span className="text-[#2A2A2A]/50">—</span>
                 )}

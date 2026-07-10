@@ -15,10 +15,7 @@ export function TableSkeleton({
       <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
         <div className="flex gap-4 border-b border-gray-200 bg-[#faf8f5] px-4 py-3">
           {Array.from({ length: columns }).map((_, index) => (
-            <div
-              key={index}
-              className="h-4 flex-1 animate-pulse rounded bg-black/[0.06]"
-            />
+            <div key={index} className="skeleton h-4 flex-1 rounded" />
           ))}
         </div>
         {Array.from({ length: rows }).map((_, rowIndex) => (
@@ -27,10 +24,7 @@ export function TableSkeleton({
             className="flex gap-4 border-b border-gray-100 px-4 py-4 last:border-b-0"
           >
             {Array.from({ length: columns }).map((_, colIndex) => (
-              <div
-                key={colIndex}
-                className="h-4 flex-1 animate-pulse rounded bg-black/[0.04]"
-              />
+              <div key={colIndex} className="skeleton h-4 flex-1 rounded" />
             ))}
           </div>
         ))}

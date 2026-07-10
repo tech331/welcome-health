@@ -1,8 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
 import type { SupplierRecord } from "@/lib/suppliers";
 import { useQuerySelection } from "@/lib/useQuerySelection";
-import { SupplierSideSheet } from "./SupplierSideSheet";
+import { useRelatedRecords } from "@/components/related-records/RelatedRecordProvider";
 import { SuppliersTable } from "./SuppliersTable";
 
 type SuppliersPageViewProps = {
@@ -17,27 +18,36 @@ export function SuppliersPageView({
   fetchError,
 }: SuppliersPageViewProps) {
   const [selectedId, setSelectedId] = useQuerySelection();
+  const { openSupplier, close, activeRecord } = useRelatedRecords();
 
-  const selected =
-    suppliers.find((supplier) => supplier.id === selectedId) ?? null;
+  useEffect(() => {
+    if (!selectedId) return;
+    const selectedSupplier = suppliers.find((supplier) => supplier.id === selectedId);
+    openSupplier(selectedId, selectedSupplier);
+  }, [openSupplier, selectedId, suppliers]);
+
+  const activeId =
+    activeRecord?.type === "supplier" ? activeRecord.id : null;
 
   return (
-    <div className="flex h-full w-full min-h-0 overflow-hidden">
-      <div className="min-w-0 flex-1 overflow-y-auto px-8 pb-8 pt-8">
-        <h1 className="mb-6 font-sans text-2xl font-semibold text-[#2A2A2A]">
-          Suppliers
-        </h1>
-        <SuppliersTable
-          suppliers={suppliers}
-          isConfigured={isConfigured}
-          fetchError={fetchError}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-        />
-      </div>
-      <SupplierSideSheet
-        supplier={selected}
-        onClose={() => setSelectedId(null)}
+    <div className="h-full overflow-y-auto px-8 pb-8 pt-8">
+      <h1 className="mb-6 font-sans text-2xl font-semibold text-[#2A2A2A]">
+        Suppliers
+      </h1>
+      <SuppliersTable
+        suppliers={suppliers}
+        isConfigured={isConfigured}
+        fetchError={fetchError}
+        selectedId={activeId}
+        onSelect={(id) => {
+          setSelectedId(id);
+          if (!id) {
+            close();
+            return;
+          }
+          const selectedSupplier = suppliers.find((supplier) => supplier.id === id);
+          openSupplier(id, selectedSupplier);
+        }}
       />
     </div>
   );
