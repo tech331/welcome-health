@@ -13,16 +13,35 @@ const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
 
 const DEFAULT_STYLE = { bg: "#ede8e3", text: "#6b6b6b" };
 
+/** Workflow order for dashboard legend and donut segments. */
+export const STATUS_DISPLAY_ORDER = [
+  "Draft",
+  "Quote Requested",
+  "Quote Received",
+  "Open",
+  "In Progress",
+  "Overdue",
+  "Closed",
+  "Complete",
+  "Done",
+  "Active",
+] as const;
+
+export function getStatusStyle(status: string): { bg: string; text: string } {
+  return (
+    STATUS_STYLES[status] ??
+    (status.trim().toLowerCase() === "active"
+      ? STATUS_STYLES.Active
+      : DEFAULT_STYLE)
+  );
+}
+
 export function StatusChip({ status }: { status: string }) {
   if (!status || status === "—") {
     return <span className="text-[#2A2A2A]/40">—</span>;
   }
 
-  const style =
-    STATUS_STYLES[status] ??
-    (status.trim().toLowerCase() === "active"
-      ? STATUS_STYLES.Active
-      : DEFAULT_STYLE);
+  const style = getStatusStyle(status);
 
   return (
     <span

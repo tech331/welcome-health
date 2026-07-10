@@ -186,7 +186,7 @@ export function AddressAutocomplete({
   const dropdown = useMemo(() => {
     if (!open) return null;
     return (
-      <ul className="absolute z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+      <ul className="dropdown-ease absolute z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
         {loading && (
           <li className="flex items-center gap-2 px-3 py-2 text-sm text-[#2A2A2A]/50">
             <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
@@ -231,11 +231,12 @@ export function AddressAutocomplete({
 
   return (
     <div className="space-y-4 rounded-lg bg-[#faf8f5] p-4">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-[#2A2A2A]/50">
-          Address
-        </p>
-        {showManual && hasKey && (
+      {loadError && (
+        <p className="text-xs text-[#b3261e]">{loadError}</p>
+      )}
+
+      {showManual && hasKey && (
+        <div className="flex justify-end">
           <button
             type="button"
             onClick={() => {
@@ -248,11 +249,7 @@ export function AddressAutocomplete({
             <Search className="h-3.5 w-3.5" strokeWidth={2} />
             Search for an address
           </button>
-        )}
-      </div>
-
-      {loadError && (
-        <p className="text-xs text-[#b3261e]">{loadError}</p>
+        </div>
       )}
 
       {!showManual ? (

@@ -53,6 +53,11 @@
     animation: skeleton-shimmer 1.5s ease-in-out infinite;
   }
 
+  .dropdown-ease {
+    transform-origin: top;
+    animation: dropdown-ease-in 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
   .nav-link-icon {
     transition: transform 0.25s cubic-bezier(0.34, 1.4, 0.64, 1);
   }
@@ -77,8 +82,23 @@
   }
 }
 
+@keyframes dropdown-ease-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scaleY(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .skeleton {
+    animation: none;
+  }
+
+  .dropdown-ease {
     animation: none;
   }
 }

@@ -1019,6 +1019,15 @@ export async function getRequestFormData(): Promise<RequestFormData> {
         id: record.id,
         name: getClientDisplayName(record.fields),
         clientId: cleanString(record.fields["Client ID"]),
+        dateOfBirth: formatDob(
+          record.fields["DOB"] ??
+            record.fields["Date of Birth"] ??
+            record.fields["dob"],
+        ),
+        email: cleanString(record.fields["Email"] ?? record.fields["email"]),
+        phone: cleanString(
+          pickField(record.fields, ["Phone", "Phone Number"]),
+        ),
         fundingType: cleanString(record.fields["Funding Type"]),
         caseManagerId: caseManager?.id ?? caseManagerIds[0] ?? null,
         caseManagerName: caseManager?.name ?? "",

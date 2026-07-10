@@ -23,6 +23,36 @@ type NewRequestModalProps = {
   onClose: () => void;
 };
 
+function StepClientSkeleton() {
+  return (
+    <div className="space-y-6" aria-hidden="true">
+      <div>
+        <div className="skeleton mb-2 h-3 w-16 rounded" />
+        <div className="skeleton h-10 w-full rounded-lg" />
+      </div>
+      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+        {[0, 1, 2, 3, 4].map((row) => (
+          <div
+            key={row}
+            className="flex items-center gap-3 border-b border-gray-100 px-3 py-2.5 last:border-b-0"
+          >
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <div
+                className="skeleton h-3.5 rounded"
+                style={{ width: `${55 - row * 6}%` }}
+              />
+              <div
+                className="skeleton h-2.5 rounded"
+                style={{ width: `${40 - row * 4}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function NewRequestModal({ onClose }: NewRequestModalProps) {
   const router = useRouter();
 
@@ -186,7 +216,7 @@ export function NewRequestModal({ onClose }: NewRequestModalProps) {
         aria-hidden="true"
       />
 
-      <div className="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+      <div className="relative flex h-[85vh] max-h-[46rem] min-h-[34rem] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
           <h2 className="text-lg font-semibold text-[#2A2A2A]">New Request</h2>
           <button
@@ -229,9 +259,7 @@ export function NewRequestModal({ onClose }: NewRequestModalProps) {
               <p className="mt-3 text-sm text-[#2A2A2A]">{loadError}</p>
             </div>
           ) : !formData ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-6 w-6 animate-spin text-[#2d6a4f]" />
-            </div>
+            <StepClientSkeleton />
           ) : (
             <>
               {currentStep === 0 && (

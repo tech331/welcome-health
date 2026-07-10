@@ -22,8 +22,8 @@ const COLUMNS: { key: SortKey; label: string }[] = [
   { key: "requestId", label: "Request ID" },
   { key: "requestor", label: "Requestor" },
   { key: "status", label: "Status" },
-  { key: "created", label: "Created" },
   { key: "sla", label: "SLA" },
+  { key: "created", label: "Created" },
 ];
 
 function createdValue(request: RequestRecord): number | null {
@@ -82,7 +82,7 @@ export function RequestsTable({
   fetchError,
 }: RequestsTableProps) {
   const router = useRouter();
-  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("requestId");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
   function toggleSort(key: SortKey) {
@@ -95,7 +95,6 @@ export function RequestsTable({
   }
 
   const sortedRequests = useMemo(() => {
-    if (!sortKey) return requests;
     const sorted = [...requests].sort((a, b) => compareRequests(a, b, sortKey));
     return sortDirection === "asc" ? sorted : sorted.reverse();
   }, [requests, sortKey, sortDirection]);
@@ -157,9 +156,6 @@ export function RequestsTable({
                 <td className="px-4 py-3">
                   <StatusChip status={request.status} />
                 </td>
-                <td className="px-4 py-3 text-[#2A2A2A]/70">
-                  {formatDate(request.createdAt)}
-                </td>
                 <td className="px-4 py-3">
                   <SlaProgress
                     slaBusinessDays={request.slaBusinessDays}
@@ -167,6 +163,9 @@ export function RequestsTable({
                     slaProgressPercent={request.slaProgressPercent}
                     isSlaOverdue={request.isSlaOverdue}
                   />
+                </td>
+                <td className="px-4 py-3 text-[#2A2A2A]/70">
+                  {formatDate(request.createdAt)}
                 </td>
               </tr>
             ))

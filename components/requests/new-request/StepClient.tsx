@@ -72,6 +72,9 @@ export function StepClient({ state, setState, errors, data }: StepClientProps) {
   }));
 
   const isNew = state.clientMode === "new";
+  const selectedClient = data.clients.find(
+    (client) => client.id === state.existingClientId,
+  );
 
   return (
     <div className="space-y-6">
@@ -96,7 +99,47 @@ export function StepClient({ state, setState, errors, data }: StepClientProps) {
           error={isNew ? undefined : errors.existingClientId}
           createLabel="Create new client"
           onCreate={() => setMode("new")}
+          defaultOpen
         />
+
+        {selectedClient && !isNew && (
+          <div className="mt-3 rounded-lg border border-gray-200 bg-[#faf8f5] p-4">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-[#2A2A2A]/50">
+                  DOB
+                </dt>
+                <dd className="mt-0.5 text-[#2A2A2A]">
+                  {selectedClient.dateOfBirth || "—"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-[#2A2A2A]/50">
+                  Email
+                </dt>
+                <dd className="mt-0.5 break-all text-[#2A2A2A]">
+                  {selectedClient.email || "—"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-[#2A2A2A]/50">
+                  Phone
+                </dt>
+                <dd className="mt-0.5 text-[#2A2A2A]">
+                  {selectedClient.phone || "—"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-[#2A2A2A]/50">
+                  Funding type
+                </dt>
+                <dd className="mt-0.5 text-[#2A2A2A]">
+                  {selectedClient.fundingType || "—"}
+                </dd>
+              </div>
+            </dl>
+          </div>
+        )}
 
         {isNew && (
           <div className="mt-3 flex items-center justify-between rounded-lg bg-[#e8f0eb]/60 px-3 py-2 text-sm text-[#2d6a4f]">
@@ -156,17 +199,16 @@ export function StepClient({ state, setState, errors, data }: StepClientProps) {
               onChange={(value) => setClientField("phone", value)}
               error={errors.phone}
             />
+            <SelectField
+              id="fundingType"
+              label="Funding type"
+              required
+              value={state.newClient.fundingType}
+              onChange={(value) => setClientField("fundingType", value)}
+              options={FUNDING_TYPES.map((type) => ({ value: type, label: type }))}
+              error={errors.fundingType}
+            />
           </div>
-
-          <SelectField
-            id="fundingType"
-            label="Funding type"
-            required
-            value={state.newClient.fundingType}
-            onChange={(value) => setClientField("fundingType", value)}
-            options={FUNDING_TYPES.map((type) => ({ value: type, label: type }))}
-            error={errors.fundingType}
-          />
 
           <AddressAutocomplete
             value={{

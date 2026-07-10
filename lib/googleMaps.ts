@@ -54,7 +54,10 @@ type GoogleMapsPlaces = {
 };
 
 type GoogleMapsGlobal = {
-  maps?: { places?: GoogleMapsPlaces };
+  maps?: {
+    places?: GoogleMapsPlaces;
+    importLibrary?: (name: string) => Promise<unknown>;
+  };
 };
 
 declare global {
@@ -89,13 +92,28 @@ export function loadGoogleMapsPlaces(): Promise<GoogleMapsPlaces> {
     script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async`;
     script.async = true;
     script.defer = true;
-    script.onload = () => {
+    // With `loading=async`, `google.maps.places` is not guaranteed to be
+    // populated the moment `onload` fires — the library initialises lazily.
+    // Await `importLibrary("places")` so we only resolve once the classes
+    // (AutocompleteService, PlacesService, …) actually exist, otherwise the
+    // first consumer sees an empty namespace and wrongly falls back to manual.
+    script.onload = async () => {
+      try {
+        await window.google?.maps?.importLibrary?.("places");
+      } catch {
+        // Ignore and fall through to the namespace check below.
+      }
       const places = window.google?.maps?.places;
-      if (places) resolve(places);
+      if (places?.AutocompleteService) resolve(places);
       else reject(new Error("Google Maps Places failed to initialise"));
     };
     script.onerror = () => reject(new Error("Failed to load Google Maps"));
     document.head.appendChild(script);
+  });
+
+  // Allow a fresh attempt if this load fails (e.g. transient network error).
+  loaderPromise.catch(() => {
+    loaderPromise = null;
   });
 
   return loaderPromise;

@@ -48,6 +48,9 @@ export type ClientOption = {
   id: string;
   name: string;
   clientId: string;
+  dateOfBirth: string;
+  email: string;
+  phone: string;
   fundingType: string;
   caseManagerId: string | null;
   caseManagerName: string;

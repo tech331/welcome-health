@@ -24,6 +24,8 @@ type ComboboxProps = {
   /** When provided, renders an action at the bottom of the dropdown. */
   createLabel?: string;
   onCreate?: () => void;
+  /** Open the search input and dropdown on mount. */
+  defaultOpen?: boolean;
 };
 
 export function Combobox({
@@ -39,8 +41,9 @@ export function Combobox({
   error,
   createLabel,
   onCreate,
+  defaultOpen = false,
 }: ComboboxProps) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -78,6 +81,11 @@ export function Combobox({
   useEffect(() => {
     setActiveIndex(0);
   }, [query, open]);
+
+  useEffect(() => {
+    if (!defaultOpen) return;
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, [defaultOpen]);
 
   function openMenu() {
     setOpen(true);
@@ -171,7 +179,7 @@ export function Combobox({
       )}
 
       {open && (
-        <ul className="absolute z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+        <ul className="dropdown-ease absolute z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
           {filteredOptions.length === 0 ? (
             <li className="px-3 py-2 text-sm text-[#2A2A2A]/50">
               {emptyMessage}
