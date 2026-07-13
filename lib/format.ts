@@ -65,11 +65,11 @@ export function formatDate(value: string | null | undefined): string {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("en-AU", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = date.toLocaleDateString("en-AU", { month: "short" });
+  const year = date.getFullYear();
+  return `${day} ${month} ${year}`;
 }
 
 /** Count weekdays strictly after `start` up to and including `end`. */

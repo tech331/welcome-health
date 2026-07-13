@@ -48,7 +48,7 @@ function DetailField({
   children: ReactNode;
 }) {
   return (
-    <div className="grid gap-1 sm:grid-cols-[9rem_1fr] sm:gap-4">
+    <div className="grid gap-1 @sm:grid-cols-[9rem_1fr] @sm:gap-4">
       <div className="text-xs font-medium text-[#606060]">{label}</div>
       <div className="text-sm text-[#1a1a1a]">{children || "—"}</div>
     </div>
@@ -82,10 +82,10 @@ export function RequestDetailView({ request }: RequestDetailViewProps) {
 
       <RequestMetrics request={request} />
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start">
+      <div className="grid gap-5 @4xl:grid-cols-[minmax(0,1fr)_20rem] @4xl:items-start">
         <div className="min-w-0 space-y-5">
           <Card>
-            <div className="grid gap-6 lg:grid-cols-2">
+            <div className="grid gap-6 @3xl:grid-cols-2">
               <div>
                 <CardTitle>Request details</CardTitle>
                 <div className="space-y-3">
@@ -135,7 +135,7 @@ export function RequestDetailView({ request }: RequestDetailViewProps) {
                 </div>
               </div>
 
-              <div className="border-t border-[#f0eee9] pt-6 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+              <div className="border-t border-[#f0eee9] pt-6 @3xl:border-l @3xl:border-t-0 @3xl:pl-6 @3xl:pt-0">
                 <CardTitle>People</CardTitle>
                 <div className="space-y-4">
                   {request.client ? (
@@ -213,7 +213,7 @@ export function RequestDetailView({ request }: RequestDetailViewProps) {
           </div>
         </div>
 
-        <aside className="xl:sticky xl:top-6">
+        <aside className="@4xl:sticky @4xl:top-6">
           <Card>
             <CardTitle>Activity</CardTitle>
             <RequestActivityFeed activities={request.activities} />

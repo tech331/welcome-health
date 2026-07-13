@@ -26,7 +26,7 @@ function Metric({
           : "text-[#1a1a1a]";
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col items-center px-4 py-1 text-center sm:items-start sm:text-left">
+    <div className="flex min-w-0 flex-1 flex-col items-center px-4 py-1 text-center @2xl:items-start @2xl:text-left">
       <Icon
         className="mb-2 h-5 w-5 text-[#6f9a85]"
         strokeWidth={1.75}
@@ -67,7 +67,7 @@ export function RequestMetrics({ request }: RequestMetricsProps) {
 
   return (
     <div className="rounded-2xl border border-[#eceae6] bg-white p-5 shadow-sm">
-      <div className="flex flex-wrap divide-y divide-[#f0eee9] sm:flex-nowrap sm:divide-x sm:divide-y-0">
+      <div className="flex flex-wrap divide-y divide-[#f0eee9] @2xl:flex-nowrap @2xl:divide-x @2xl:divide-y-0">
         <Metric icon={Clock} label="SLA" value={slaLabel} />
         <Metric
           icon={Gauge}

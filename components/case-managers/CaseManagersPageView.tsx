@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import type { CaseManagerDetail, CaseManagerRecord } from "@/lib/caseManagers";
+import type { CaseManagerRecord } from "@/lib/caseManagers";
 import { useQuerySelection } from "@/lib/useQuerySelection";
 import { useRelatedRecords } from "@/components/related-records/RelatedRecordProvider";
 import { CaseManagersTable } from "./CaseManagersTable";
@@ -22,24 +22,8 @@ export function CaseManagersPageView({
 
   useEffect(() => {
     if (!selectedId) return;
-    const selectedManager = caseManagers.find((manager) => manager.id === selectedId);
-    const prefetched =
-      selectedManager == null
-        ? undefined
-        : ({
-            id: selectedManager.id,
-            displayName: selectedManager.displayName,
-            status: "—",
-            email: selectedManager.email,
-            phone: selectedManager.phone,
-            payer: selectedManager.payer && selectedManager.payer !== "—"
-              ? { id: "", name: selectedManager.payer }
-              : null,
-            relatedRequests: [],
-            relatedClients: [],
-          } satisfies CaseManagerDetail);
-    openCaseManager(selectedId, prefetched);
-  }, [caseManagers, openCaseManager, selectedId]);
+    openCaseManager(selectedId);
+  }, [openCaseManager, selectedId]);
 
   const activeId =
     activeRecord?.type === "caseManager" ? activeRecord.id : null;
@@ -60,23 +44,7 @@ export function CaseManagersPageView({
             close();
             return;
           }
-          const selectedManager = caseManagers.find((manager) => manager.id === id);
-          const prefetched =
-            selectedManager == null
-              ? undefined
-              : ({
-                  id: selectedManager.id,
-                  displayName: selectedManager.displayName,
-                  status: "—",
-                  email: selectedManager.email,
-                  phone: selectedManager.phone,
-                  payer: selectedManager.payer && selectedManager.payer !== "—"
-                    ? { id: "", name: selectedManager.payer }
-                    : null,
-                  relatedRequests: [],
-                  relatedClients: [],
-                } satisfies CaseManagerDetail);
-          openCaseManager(id, prefetched);
+          openCaseManager(id);
         }}
       />
     </div>

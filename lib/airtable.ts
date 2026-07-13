@@ -79,6 +79,7 @@ type AirtableListResponse = {
 
 async function fetchAirtableRecords(
   tableId: string,
+  options?: { fresh?: boolean },
 ): Promise<AirtableRecord[]> {
   const apiKey = getApiKey();
   if (!apiKey) {
@@ -100,7 +101,9 @@ async function fetchAirtableRecords(
       headers: {
         Authorization: `Bearer ${apiKey}`,
       },
-      next: { revalidate: AIRTABLE_REVALIDATE_SECONDS },
+      ...(options?.fresh
+        ? { cache: "no-store" }
+        : { next: { revalidate: AIRTABLE_REVALIDATE_SECONDS } }),
     });
 
     if (!response.ok) {
@@ -436,9 +439,42 @@ function resolveCaseManagerFromLookups(
   };
 }
 
+function resolveClientNameFromRequest(
+  fields: Record<string, unknown>,
+  clientIds: string[],
+  clientsById?: Map<string, string>,
+): string {
+  if (clientIds.length > 0 && clientsById) {
+    const names = clientIds
+      .map((id) => clientsById.get(id) ?? "")
+      .filter((name) => name && name !== "—");
+    if (names.length > 0) return names.join(", ");
+  }
+
+  const firstName = getLookupValue(
+    fields["First Name (from Client)"] ?? fields["Client First Name"],
+  );
+  const lastName = getLookupValue(
+    fields["Last Name (from Client)"] ?? fields["Client Last Name"],
+  );
+  const fromLookup = [firstName, lastName]
+    .filter((part) => part !== "—")
+    .join(" ")
+    .trim();
+  if (fromLookup) return fromLookup;
+
+  const clientLookup = getLookupValue(
+    pickField(fields, ["Client Name (from Client)", "Name (from Client)"]),
+  );
+  if (clientLookup !== "—") return clientLookup;
+
+  return "—";
+}
+
 function mapRequestRecord(
   record: AirtableRecord,
   usersById?: Map<string, string>,
+  clientsById?: Map<string, string>,
 ): RequestRecord {
   const { fields } = record;
 
@@ -470,6 +506,12 @@ function mapRequestRecord(
 
   const clientField =
     fields["Client"] ?? fields["Related Client"] ?? fields["client"];
+  const clientIds = extractRecordIds(clientField);
+  const clientName = resolveClientNameFromRequest(
+    fields,
+    clientIds,
+    clientsById,
+  );
 
   const createdAt =
     typeof fields["Created time"] === "string"
@@ -482,16 +524,28 @@ function mapRequestRecord(
     id: record.id,
     requestId: formatRequestId(fieldToString(requestId)),
     requestor,
+    clientName,
     status: fieldToString(status),
-    clientIds: extractRecordIds(clientField),
+    clientIds,
     createdAt,
     slaBusinessDays,
     ...sla,
   };
 }
 
-async function getUsersNameMap(): Promise<Map<string, string>> {
-  const records = await fetchAirtableRecords(AIRTABLE_USERS_TABLE_ID);
+async function getClientsNameMap(
+  options?: { fresh?: boolean },
+): Promise<Map<string, string>> {
+  const records = await fetchAirtableRecords(AIRTABLE_CLIENTS_TABLE_ID, options);
+  return new Map(
+    records.map((record) => [record.id, getClientDisplayName(record.fields)]),
+  );
+}
+
+async function getUsersNameMap(
+  options?: { fresh?: boolean },
+): Promise<Map<string, string>> {
+  const records = await fetchAirtableRecords(AIRTABLE_USERS_TABLE_ID, options);
   return new Map(
     records.map((record) => [record.id, getPersonDisplayName(record.fields)]),
   );
@@ -806,21 +860,23 @@ export async function getCaseManagerDetailById(
 
   const status = fieldToString(pickField(fields, ["Status", "status"]));
 
+  // The Case Manager record links directly to its Clients and Requests, so read
+  // those linked record IDs and hydrate them. (A filterByFormula match on the
+  // child tables doesn't work here because ARRAYJOIN of a linked-record field
+  // yields the linked records' names, not their IDs.)
+  const clientIds = extractRecordIds(
+    pickField(fields, ["Clients", "Related Clients", "Client"]),
+  );
+  const requestIds = extractRecordIds(
+    pickField(fields, ["Requests", "Related Requests", "Request"]),
+  );
+
   const [clientRecords, requestRecords] = await Promise.all([
-    fetchAirtableRecordsByFormula(
-      AIRTABLE_CLIENTS_TABLE_ID,
-      `FIND('${id}', ARRAYJOIN({Case Manager}))`,
-    ),
-    fetchAirtableRecordsByFormula(
-      AIRTABLE_REQUESTS_TABLE_ID,
-      `FIND('${id}', ARRAYJOIN({Case Manager}))`,
-    ),
+    fetchAirtableRecordsByIds(AIRTABLE_CLIENTS_TABLE_ID, clientIds),
+    fetchAirtableRecordsByIds(AIRTABLE_REQUESTS_TABLE_ID, requestIds),
   ]);
 
   const relatedClients = clientRecords
-    .filter((client) =>
-      extractRecordIds(client.fields["Case Manager"]).includes(id),
-    )
     .map((client) => ({
       id: client.id,
       displayName: getClientDisplayName(client.fields),
@@ -828,9 +884,6 @@ export async function getCaseManagerDetailById(
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
 
   const relatedRequests = requestRecords
-    .filter((request) =>
-      extractRecordIds(request.fields["Case Manager"]).includes(id),
-    )
     .map((request) => ({
       id: request.id,
       requestId: formatRequestId(
@@ -937,11 +990,15 @@ export async function getRequests(): Promise<RequestRecord[]> {
     return [];
   }
 
-  const [records, usersById] = await Promise.all([
-    fetchAirtableRecords(AIRTABLE_REQUESTS_TABLE_ID),
-    getUsersNameMap(),
+  const fresh = { fresh: true };
+  const [records, usersById, clientsById] = await Promise.all([
+    fetchAirtableRecords(AIRTABLE_REQUESTS_TABLE_ID, fresh),
+    getUsersNameMap(fresh),
+    getClientsNameMap(fresh),
   ]);
-  return records.map((record) => mapRequestRecord(record, usersById));
+  return records.map((record) =>
+    mapRequestRecord(record, usersById, clientsById),
+  );
 }
 
 export async function getRequestById(

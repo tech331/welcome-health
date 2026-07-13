@@ -2,6 +2,7 @@ export type RequestRecord = {
   id: string;
   requestId: string;
   requestor: string;
+  clientName: string;
   status: string;
   clientIds: string[];
   createdAt: string | null;

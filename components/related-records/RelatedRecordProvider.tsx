@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { usePathname } from "next/navigation";
 import type { CaseManagerDetail } from "@/lib/caseManagers";
 import type { ClientRecord } from "@/lib/clients";
 import {
@@ -95,6 +96,23 @@ export function RelatedRecordProvider({
     setActiveRecord(null);
   }, []);
 
+  // Close the side sheet whenever we navigate to a different page, so a record
+  // opened on one page (e.g. a case manager on a request) doesn't persist onto
+  // the next. Pages that deep-link to a record carry a `?selected=` param and
+  // reopen the sheet themselves, so skip closing in that case.
+  const pathname = usePathname();
+  const previousPathnameRef = useRef(pathname);
+  useEffect(() => {
+    if (previousPathnameRef.current === pathname) return;
+    previousPathnameRef.current = pathname;
+    const hasDeepLinkSelection = new URLSearchParams(
+      window.location.search,
+    ).get("selected");
+    if (!hasDeepLinkSelection) {
+      setActiveRecord(null);
+    }
+  }, [pathname]);
+
   useEffect(() => {
     if (!activeRecord) {
       setRecordData(null);
@@ -176,7 +194,9 @@ export function RelatedRecordProvider({
   return (
     <RelatedRecordContext.Provider value={contextValue}>
       <div className="flex h-full w-full min-h-0 overflow-hidden">
-        <div className="min-w-0 flex-1 overflow-hidden">{children}</div>
+        <div className="@container min-w-0 flex-1 overflow-hidden">
+          {children}
+        </div>
         {loading && activeRecord ? (
           <aside className="flex h-full w-96 shrink-0 flex-col border-l border-gray-200 bg-white shadow-[-2px_0_6px_-1px_rgba(0,0,0,0.08)]">
             <div className="border-b border-gray-100 px-4 py-2.5">

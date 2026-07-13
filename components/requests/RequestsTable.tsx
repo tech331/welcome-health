@@ -15,11 +15,12 @@ type RequestsTableProps = {
   fetchError?: string | null;
 };
 
-type SortKey = "requestId" | "requestor" | "status" | "created" | "sla";
+type SortKey = "requestId" | "requestor" | "client" | "status" | "created" | "sla";
 type SortDirection = "asc" | "desc";
 
 const COLUMNS: { key: SortKey; label: string }[] = [
   { key: "requestId", label: "Request ID" },
+  { key: "client", label: "Client" },
   { key: "requestor", label: "Requestor" },
   { key: "status", label: "Status" },
   { key: "sla", label: "SLA" },
@@ -51,6 +52,10 @@ function compareRequests(
       });
     case "requestor":
       return a.requestor.localeCompare(b.requestor, undefined, {
+        numeric: true,
+      });
+    case "client":
+      return a.clientName.localeCompare(b.clientName, undefined, {
         numeric: true,
       });
     case "status":
@@ -152,6 +157,7 @@ export function RequestsTable({
                 <td className="px-4 py-3 font-medium text-[#2A2A2A]">
                   {request.requestId}
                 </td>
+                <td className="px-4 py-3 text-[#2A2A2A]">{request.clientName}</td>
                 <td className="px-4 py-3 text-[#2A2A2A]">{request.requestor}</td>
                 <td className="px-4 py-3">
                   <StatusChip status={request.status} />

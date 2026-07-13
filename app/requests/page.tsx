@@ -1,3 +1,4 @@
+import { unstable_noStore as noStore } from "next/cache";
 import { getRequests, isAirtableConfigured } from "@/lib/airtable";
 import {
   getRequestTabCounts,
@@ -9,6 +10,8 @@ import {
 } from "@/components/requests/RequestsPageContent";
 
 export default async function RequestsPage() {
+  noStore();
+
   let requests: RequestRecord[] = [];
   let fetchError: string | null = null;
 
