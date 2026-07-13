@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createNewRequest, isAirtableConfigured } from "@/lib/airtable";
 import { sendRequestAcknowledgementEmail } from "@/lib/email/sendAcknowledgementEmail";
+import { sendSupplierQuoteEmails } from "@/lib/email/sendSupplierQuoteEmails";
 import {
   FOLLOW_UP_OPTIONS,
   type NewRequestItemInput,
@@ -171,6 +172,20 @@ export async function POST(request: Request) {
       });
     } catch (emailError) {
       console.error("Acknowledgement email failed:", emailError);
+    }
+
+    try {
+      await sendSupplierQuoteEmails({
+        requestRecordId: result.id,
+        requestId: result.requestId,
+        items: payload.items.map((item) => ({
+          name: item.name,
+          url: item.url ?? "",
+        })),
+        slaBusinessDays: payload.followUpBusinessDays,
+      });
+    } catch (supplierEmailError) {
+      console.error("Supplier quote emails failed:", supplierEmailError);
     }
 
     return NextResponse.json(result, { status: 201 });

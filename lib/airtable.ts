@@ -1,6 +1,11 @@
 import type { CaseManagerDetail, CaseManagerRecord } from "./caseManagers";
 import type { CaseManagerContact, ClientRecord } from "./clients";
-import { businessDaysBetween, formatRequestId } from "./format";
+import {
+  businessDaysBetween,
+  formatAddressLines,
+  formatAuPhone,
+  formatRequestId,
+} from "./format";
 import {
   getInitials,
   type PayerCaseManager,
@@ -1223,6 +1228,128 @@ export async function createNewRequest(
     id: requestRecord.id,
     requestId:
       requestId === "—" ? requestRecord.id : formatRequestId(requestId),
+  };
+}
+
+export type SupplierQuoteEmailSupplier = {
+  id: string;
+  name: string;
+  email: string;
+};
+
+export type SupplierQuoteEmailContext = {
+  client: {
+    fullName: string;
+    phone: string;
+    address: string;
+  };
+  payerName: string;
+  requestor: {
+    fullName: string;
+    role: string;
+    phone: string;
+  };
+  suppliers: SupplierQuoteEmailSupplier[];
+};
+
+/**
+ * Resolve the client, payer, requestor, and supplier details for a request so a
+ * quote-request email can be built for each selected supplier. Reads the
+ * request record's direct fields (Client, Payers, Requestor, Suppliers), which
+ * are all set at creation time.
+ */
+export async function getSupplierQuoteEmailContext(
+  requestRecordId: string,
+): Promise<SupplierQuoteEmailContext | null> {
+  if (!isAirtableConfigured()) return null;
+
+  const record = await fetchAirtableRecord(
+    AIRTABLE_REQUESTS_TABLE_ID,
+    requestRecordId,
+  );
+  if (!record) return null;
+  const { fields } = record;
+
+  const clientIds = extractRecordIds(fields["Client"]);
+  const supplierIds = extractRecordIds(fields["Suppliers"]);
+  const requestorIds = extractRecordIds(fields["Requestor"]);
+  const payerIds = extractRecordIds(fields["Payers"]);
+
+  const [clientRecords, supplierRecords, requestorRecords, payerNames] =
+    await Promise.all([
+      fetchAirtableRecordsByIds(AIRTABLE_CLIENTS_TABLE_ID, clientIds),
+      fetchAirtableRecordsByIds(AIRTABLE_SUPPLIERS_TABLE_ID, supplierIds),
+      fetchAirtableRecordsByIds(AIRTABLE_USERS_TABLE_ID, requestorIds),
+      getPayerNamesMap(),
+    ]);
+
+  const clientRecord = clientRecords[0];
+  const clientFields = clientRecord?.fields ?? {};
+  const address = clientRecord
+    ? formatAddressLines({
+        line1: cleanString(pickField(clientFields, ["Address Line 1", "Address 1"])),
+        line2: cleanString(pickField(clientFields, ["Address Line 2", "Address 2"])),
+        city: cleanString(pickField(clientFields, ["City", "Suburb"])),
+        state: cleanString(pickField(clientFields, ["State"])),
+        postcode: cleanString(
+          pickField(clientFields, ["Postcode", "Post Code", "Zip"]),
+        ),
+      }).join(", ")
+    : "";
+
+  const payerName =
+    payerIds
+      .map((id) => payerNames.get(id) ?? "")
+      .filter((name) => name && name !== "—")
+      .join(", ") || "";
+
+  const requestorRecord = requestorRecords[0];
+  const requestorFields = requestorRecord?.fields ?? {};
+
+  const suppliers: SupplierQuoteEmailSupplier[] = supplierIds.map((id) => {
+    const supplier = supplierRecords.find((item) => item.id === id);
+    const supplierFields = supplier?.fields ?? {};
+    return {
+      id,
+      name:
+        cleanString(pickField(supplierFields, ["Supplier Name", "Name"])) ||
+        "Unnamed supplier",
+      email: cleanString(pickField(supplierFields, ["Contact Email", "Email"])),
+    };
+  });
+
+  return {
+    client: {
+      fullName: getClientDisplayName(clientFields),
+      phone: formatAuPhone(
+        cleanString(pickField(clientFields, ["Phone", "Phone Number"])),
+      ),
+      address,
+    },
+    payerName,
+    requestor: {
+      fullName: getPersonDisplayName(requestorFields),
+      role: cleanString(
+        pickField(requestorFields, [
+          "Role",
+          "Title",
+          "Job Title",
+          "Position",
+          "Job title",
+        ]),
+      ),
+      phone: formatAuPhone(
+        cleanString(
+          pickField(requestorFields, [
+            "Phone",
+            "Phone Number",
+            "Mobile",
+            "Contact Number",
+          ]),
+        ),
+      ),
+    },
+    suppliers,
   };
 }
 

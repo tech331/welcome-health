@@ -25,6 +25,28 @@ export function formatAddressLines(parts: AddressParts): string[] {
 }
 
 /**
+ * Format an Australian phone number as "(0X) XXXX XXXX" — the two-digit
+ * area/prefix in brackets, the remaining digits outside. Handles a leading
+ * +61 country code and returns the original string if it can't be parsed.
+ */
+export function formatAuPhone(value: string | null | undefined): string {
+  if (!value) return "";
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === "—") return "";
+
+  let digits = trimmed.replace(/\D/g, "");
+  if (digits.startsWith("61")) digits = `0${digits.slice(2)}`;
+  if (digits.length < 3) return trimmed;
+
+  const area = digits.slice(0, 2);
+  const rest = digits.slice(2);
+  const groupedRest =
+    rest.length === 8 ? `${rest.slice(0, 4)} ${rest.slice(4)}` : rest;
+
+  return `(${area}) ${groupedRest}`;
+}
+
+/**
  * Format a request's auto-number into a padded, prefixed ID (e.g. 5 -> QR-0005).
  * Non-numeric values (like an Airtable record id fallback) are returned as-is.
  */
