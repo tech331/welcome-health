@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import type { RequestActivityDetail } from "@/lib/requestDetail";
 import { formatDateTime } from "@/lib/format";
+import { parseActivityContent } from "@/lib/email/activityContent";
 
 type RequestActivityFeedProps = {
   activities: RequestActivityDetail[];
@@ -44,6 +45,7 @@ export function RequestActivityFeed({ activities }: RequestActivityFeedProps) {
     <ol className="relative ml-3 space-y-0 border-l border-[#e8e4df]">
       {activities.map((activity) => {
         const isInbound = activity.direction.toLowerCase() === "inbound";
+        const { main, resendId } = parseActivityContent(activity.content);
         return (
           <li key={activity.id} className="relative pb-5 pl-5 last:pb-0">
             <span
@@ -83,8 +85,11 @@ export function RequestActivityFeed({ activities }: RequestActivityFeedProps) {
                 )}
               </div>
               <p className="mt-2 whitespace-pre-wrap text-sm text-[#1a1a1a]">
-                {activity.content}
+                {main}
               </p>
+              {resendId && (
+                <p className="mt-1 text-xs text-[#606060]">Resend: {resendId}</p>
+              )}
             </div>
           </li>
         );

@@ -1,6 +1,10 @@
 import { Resend } from "resend";
 import { createActivityRecord } from "@/lib/airtable";
 import {
+  appendResendId,
+  buildEmailActivityContent,
+} from "./activityContent";
+import {
   buildAcknowledgementEmailHtml,
   buildAcknowledgementEmailText,
   getRequestDetailUrl,
@@ -68,6 +72,9 @@ export async function sendRequestAcknowledgementEmail({
     requestRecordId,
     channel: "Email",
     direction: "Outbound",
-    content: `Acknowledgement email sent to ${to.join(", ")} for request ${requestId}.${data?.id ? ` (Resend ID: ${data.id})` : ""}`,
+    content: appendResendId(
+      buildEmailActivityContent("Requestor", to),
+      data?.id,
+    ),
   });
 }

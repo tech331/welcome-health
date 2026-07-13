@@ -4,6 +4,10 @@ import {
   getSupplierQuoteEmailContext,
 } from "@/lib/airtable";
 import {
+  appendResendId,
+  buildEmailActivityContent,
+} from "./activityContent";
+import {
   buildSupplierQuoteEmailHtml,
   buildSupplierQuoteEmailSubject,
   buildSupplierQuoteEmailText,
@@ -113,11 +117,10 @@ export async function sendSupplierQuoteEmails({
         requestRecordId,
         channel: "Email",
         direction: "Outbound",
-        content: `Quote request email for supplier "${supplier.name}" sent to ${to.join(
-          ", ",
-        )}${cc.length > 0 ? ` (cc: ${cc.join(", ")})` : ""} for request ${requestId}.${
-          data?.id ? ` (Resend ID: ${data.id})` : ""
-        }`,
+        content: appendResendId(
+          buildEmailActivityContent("Supplier", to, { cc }),
+          data?.id,
+        ),
       });
     } catch (supplierError) {
       console.error(
