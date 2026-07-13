@@ -1,8 +1,16 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import { ArrowRight, FilePenLine } from "lucide-react";
-import { NewRequestModal } from "@/components/requests/new-request/NewRequestModal";
+
+const NewRequestModal = dynamic(
+  () =>
+    import("@/components/requests/new-request/NewRequestModal").then(
+      (mod) => mod.NewRequestModal,
+    ),
+  { ssr: false },
+);
 
 export function CreateRequestTile() {
   const [open, setOpen] = useState(false);

@@ -1,5 +1,4 @@
-import { getRequests } from "@/lib/airtable";
-import type { RequestRecord } from "@/lib/requests";
+import { getRequestStatusCounts } from "@/lib/airtable";
 import {
   getStatusChartColor,
   STATUS_DISPLAY_ORDER,
@@ -11,6 +10,8 @@ import {
 } from "@/components/home/RequestOverviewChart";
 import { CreateRequestTile } from "@/components/home/CreateRequestTile";
 
+export const revalidate = 30;
+
 function statusSortIndex(label: string): number {
   const index = STATUS_DISPLAY_ORDER.indexOf(
     label as (typeof STATUS_DISPLAY_ORDER)[number],
@@ -18,18 +19,14 @@ function statusSortIndex(label: string): number {
   return index === -1 ? STATUS_DISPLAY_ORDER.length : index;
 }
 
-function buildStatusSlices(requests: RequestRecord[]): StatusSlice[] {
-  const counts = new Map<string, number>();
-  for (const request of requests) {
-    const status = request.status?.trim() || "Unknown";
-    counts.set(status, (counts.get(status) ?? 0) + 1);
-  }
-
-  return Array.from(counts.entries())
-    .map(([label, count]) => ({
-      label,
+function buildStatusSlices(
+  counts: { status: string; count: number }[],
+): StatusSlice[] {
+  return counts
+    .map(({ status, count }) => ({
+      label: status,
       count,
-      color: getStatusChartColor(label),
+      color: getStatusChartColor(status),
     }))
     .sort((a, b) => {
       const orderDiff = statusSortIndex(a.label) - statusSortIndex(b.label);
@@ -39,14 +36,14 @@ function buildStatusSlices(requests: RequestRecord[]): StatusSlice[] {
 }
 
 export default async function Home() {
-  let requests: RequestRecord[] = [];
+  let statusCounts: { status: string; count: number }[] = [];
   try {
-    requests = await getRequests();
+    statusCounts = await getRequestStatusCounts();
   } catch (error) {
     console.error("Failed to fetch requests for home dashboard:", error);
   }
 
-  const slices = buildStatusSlices(requests);
+  const slices = buildStatusSlices(statusCounts);
 
   return (
     <div className="h-full overflow-y-auto px-8 pb-8 pt-8">

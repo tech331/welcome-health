@@ -2,6 +2,8 @@ import { getSuppliers, isAirtableConfigured } from "@/lib/airtable";
 import type { SupplierRecord } from "@/lib/suppliers";
 import { SuppliersPageView } from "@/components/suppliers/SuppliersPageView";
 
+export const revalidate = 30;
+
 export default async function SuppliersPage() {
   let suppliers: SupplierRecord[] = [];
   let fetchError: string | null = null;

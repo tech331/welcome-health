@@ -2,6 +2,8 @@ import { getCaseManagers, isAirtableConfigured } from "@/lib/airtable";
 import type { CaseManagerRecord } from "@/lib/caseManagers";
 import { CaseManagersPageView } from "@/components/case-managers/CaseManagersPageView";
 
+export const revalidate = 30;
+
 export default async function CaseManagersPage() {
   let caseManagers: CaseManagerRecord[] = [];
   let fetchError: string | null = null;

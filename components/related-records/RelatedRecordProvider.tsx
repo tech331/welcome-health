@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import {
   createContext,
   useCallback,
@@ -18,9 +19,28 @@ import {
   type RelatedRecordType,
 } from "@/lib/relatedRecords";
 import type { SupplierRecord } from "@/lib/suppliers";
-import { ClientSideSheet } from "@/components/clients/ClientSideSheet";
-import { CaseManagerSideSheet } from "@/components/case-managers/CaseManagerSideSheet";
-import { SupplierSideSheet } from "@/components/suppliers/SupplierSideSheet";
+
+const ClientSideSheet = dynamic(
+  () =>
+    import("@/components/clients/ClientSideSheet").then(
+      (mod) => mod.ClientSideSheet,
+    ),
+  { ssr: false },
+);
+const CaseManagerSideSheet = dynamic(
+  () =>
+    import("@/components/case-managers/CaseManagerSideSheet").then(
+      (mod) => mod.CaseManagerSideSheet,
+    ),
+  { ssr: false },
+);
+const SupplierSideSheet = dynamic(
+  () =>
+    import("@/components/suppliers/SupplierSideSheet").then(
+      (mod) => mod.SupplierSideSheet,
+    ),
+  { ssr: false },
+);
 
 type RelatedRecordData = ClientRecord | CaseManagerDetail | SupplierRecord;
 

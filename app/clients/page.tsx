@@ -2,6 +2,8 @@ import { getClients, isAirtableConfigured } from "@/lib/airtable";
 import type { ClientRecord } from "@/lib/clients";
 import { ClientsPageView } from "@/components/clients/ClientsPageView";
 
+export const revalidate = 30;
+
 export default async function ClientsPage() {
   let clients: ClientRecord[] = [];
   let fetchError: string | null = null;

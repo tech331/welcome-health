@@ -2,6 +2,8 @@ import { getPayers, isAirtableConfigured } from "@/lib/airtable";
 import type { PayerRecord } from "@/lib/payers";
 import { PayersList } from "@/components/payers/PayersList";
 
+export const revalidate = 30;
+
 export default async function PayersPage() {
   let payers: PayerRecord[] = [];
   let fetchError: string | null = null;

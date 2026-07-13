@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { createNewRequest, isAirtableConfigured } from "@/lib/airtable";
 import { sendRequestAcknowledgementEmail } from "@/lib/email/sendAcknowledgementEmail";
 import { sendSupplierQuoteEmails } from "@/lib/email/sendSupplierQuoteEmails";
@@ -7,8 +8,6 @@ import {
   type NewRequestItemInput,
   type NewRequestPayload,
 } from "@/lib/requestForm";
-
-export const dynamic = "force-dynamic";
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
@@ -164,6 +163,10 @@ export async function POST(request: Request) {
 
   try {
     const result = await createNewRequest(payload);
+
+    revalidatePath("/");
+    revalidatePath("/requests");
+    revalidatePath("/clients");
 
     try {
       await sendRequestAcknowledgementEmail({

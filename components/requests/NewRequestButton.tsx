@@ -1,8 +1,14 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import { Plus } from "lucide-react";
-import { NewRequestModal } from "./new-request/NewRequestModal";
+
+const NewRequestModal = dynamic(
+  () =>
+    import("./new-request/NewRequestModal").then((mod) => mod.NewRequestModal),
+  { ssr: false },
+);
 
 export function NewRequestButton() {
   const [open, setOpen] = useState(false);

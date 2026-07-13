@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { CaseManagerDetail, CaseManagerRecord } from "./caseManagers";
 import type { CaseManagerContact, ClientRecord } from "./clients";
 import {
@@ -62,6 +63,50 @@ const AIRTABLE_ACTIVITIES_TABLE_ID =
 // How long (seconds) to cache Airtable responses. Repeat page loads within
 // this window are served instantly from cache instead of re-fetching.
 const AIRTABLE_REVALIDATE_SECONDS = 30;
+
+/** Per-request deduplication of full-table Airtable reads. */
+const loadClientsTable = cache(() =>
+  fetchAirtableRecords(AIRTABLE_CLIENTS_TABLE_ID),
+);
+const loadRequestsTable = cache(() =>
+  fetchAirtableRecords(AIRTABLE_REQUESTS_TABLE_ID),
+);
+const loadUsersTable = cache(() =>
+  fetchAirtableRecords(AIRTABLE_USERS_TABLE_ID),
+);
+const loadCaseManagersTable = cache(() =>
+  fetchAirtableRecords(AIRTABLE_CASE_MANAGERS_TABLE_ID),
+);
+const loadSuppliersTable = cache(() =>
+  fetchAirtableRecords(AIRTABLE_SUPPLIERS_TABLE_ID),
+);
+const loadPayersTable = cache(() =>
+  fetchAirtableRecords(AIRTABLE_PAYERS_TABLE_ID),
+);
+
+const loadCaseManagersMap = cache(async () => {
+  const records = await loadCaseManagersTable();
+  return new Map(
+    records.map((record) => [record.id, mapCaseManagerRecord(record)]),
+  );
+});
+
+const loadPayerNamesMap = cache(async () => {
+  const records = await loadPayersTable();
+  return new Map(
+    records.map((record) => [
+      record.id,
+      fieldToString(
+        pickField(record.fields, [
+          "Payer Name",
+          "Name",
+          "Provider Name",
+          "Account Name",
+        ]),
+      ),
+    ]),
+  );
+});
 
 function getApiKey(): string | undefined {
   return process.env.AIRTABLE_API_KEY;
@@ -538,34 +583,51 @@ function mapRequestRecord(
   };
 }
 
-async function getClientsNameMap(
-  options?: { fresh?: boolean },
-): Promise<Map<string, string>> {
-  const records = await fetchAirtableRecords(AIRTABLE_CLIENTS_TABLE_ID, options);
+async function getClientsNameMap(): Promise<Map<string, string>> {
+  const records = await loadClientsTable();
   return new Map(
     records.map((record) => [record.id, getClientDisplayName(record.fields)]),
   );
 }
 
-async function getUsersNameMap(
-  options?: { fresh?: boolean },
-): Promise<Map<string, string>> {
-  const records = await fetchAirtableRecords(AIRTABLE_USERS_TABLE_ID, options);
+async function getUsersNameMap(): Promise<Map<string, string>> {
+  const records = await loadUsersTable();
   return new Map(
     records.map((record) => [record.id, getPersonDisplayName(record.fields)]),
   );
 }
 
-function buildRequestsByClient(requests: RequestRecord[]) {
-  const byClient = new Map<string, RequestRecord[]>();
+type ClientLinkedRequest = {
+  id: string;
+  requestId: string;
+  status: string;
+};
 
-  for (const request of requests) {
-    for (const clientId of request.clientIds) {
+function buildRequestsByClientFromRecords(
+  records: AirtableRecord[],
+): Map<string, ClientLinkedRequest[]> {
+  const byClient = new Map<string, ClientLinkedRequest[]>();
+
+  for (const record of records) {
+    const clientIds = extractRecordIds(
+      record.fields["Client"] ??
+        record.fields["Related Client"] ??
+        record.fields["client"],
+    );
+    const summary: ClientLinkedRequest = {
+      id: record.id,
+      requestId: formatRequestId(
+        fieldToString(record.fields["Request ID"] ?? record.id),
+      ),
+      status: fieldToString(record.fields["Status"]),
+    };
+
+    for (const clientId of clientIds) {
       const existing = byClient.get(clientId);
       if (existing) {
-        existing.push(request);
+        existing.push(summary);
       } else {
-        byClient.set(clientId, [request]);
+        byClient.set(clientId, [summary]);
       }
     }
   }
@@ -575,7 +637,7 @@ function buildRequestsByClient(requests: RequestRecord[]) {
 
 function mapClientRecord(
   record: AirtableRecord,
-  requestsByClient: Map<string, RequestRecord[]>,
+  requestsByClient: Map<string, ClientLinkedRequest[]>,
   caseManagers: Map<string, CaseManagerContact>,
 ): ClientRecord {
   const { fields } = record;
@@ -633,10 +695,7 @@ function mapClientRecord(
 }
 
 async function getCaseManagersMap(): Promise<Map<string, CaseManagerContact>> {
-  const records = await fetchAirtableRecords(AIRTABLE_CASE_MANAGERS_TABLE_ID);
-  return new Map(
-    records.map((record) => [record.id, mapCaseManagerRecord(record)]),
-  );
+  return loadCaseManagersMap();
 }
 
 function pickField(
@@ -674,7 +733,7 @@ function mapSupplierRecord(record: AirtableRecord): PayerSupplier {
 }
 
 async function getSuppliersMap(): Promise<Map<string, PayerSupplier>> {
-  const records = await fetchAirtableRecords(AIRTABLE_SUPPLIERS_TABLE_ID);
+  const records = await loadSuppliersTable();
   return new Map(records.map((record) => [record.id, mapSupplierRecord(record)]));
 }
 
@@ -736,9 +795,9 @@ export async function getPayers(): Promise<PayerRecord[]> {
   }
 
   const [payerRecords, suppliers, caseManagers] = await Promise.all([
-    fetchAirtableRecords(AIRTABLE_PAYERS_TABLE_ID),
+    loadPayersTable(),
     getSuppliersMap(),
-    getCaseManagersMap(),
+    loadCaseManagersMap(),
   ]);
 
   return payerRecords
@@ -747,7 +806,17 @@ export async function getPayers(): Promise<PayerRecord[]> {
 }
 
 async function getPayerNamesMap(): Promise<Map<string, string>> {
-  const records = await fetchAirtableRecords(AIRTABLE_PAYERS_TABLE_ID);
+  return loadPayerNamesMap();
+}
+
+async function getPayerNamesByIds(
+  payerIds: string[],
+): Promise<Map<string, string>> {
+  if (payerIds.length === 0) return new Map();
+  const records = await fetchAirtableRecordsByIds(
+    AIRTABLE_PAYERS_TABLE_ID,
+    payerIds,
+  );
   return new Map(
     records.map((record) => [
       record.id,
@@ -799,7 +868,7 @@ export async function getCaseManagers(): Promise<CaseManagerRecord[]> {
   }
 
   const [records, payerNames] = await Promise.all([
-    fetchAirtableRecords(AIRTABLE_CASE_MANAGERS_TABLE_ID),
+    loadCaseManagersTable(),
     getPayerNamesMap(),
   ]);
 
@@ -817,19 +886,18 @@ export async function getClientById(id: string): Promise<ClientRecord | null> {
   const caseManagerIds = extractRecordIds(
     record.fields["Case Manager"] ?? record.fields["case_manager"],
   );
-  const [caseManagerRecords, requestRecords] = await Promise.all([
+  const [caseManagerRecords, allRequestRecords] = await Promise.all([
     fetchAirtableRecordsByIds(AIRTABLE_CASE_MANAGERS_TABLE_ID, caseManagerIds),
-    fetchAirtableRecordsByFormula(
-      AIRTABLE_REQUESTS_TABLE_ID,
-      `FIND('${id}', ARRAYJOIN({Client}))`,
-    ),
+    loadRequestsTable(),
   ]);
   const caseManagers = new Map(
     caseManagerRecords.map((item) => [item.id, mapCaseManagerRecord(item)]),
   );
-  const requestsByClient = new Map<string, RequestRecord[]>([
-    [id, requestRecords.map((item) => mapRequestRecord(item))],
-  ]);
+  const clientRequestRecords = allRequestRecords.filter((request) =>
+    extractRecordIds(request.fields["Client"]).includes(id),
+  );
+  const requestsByClient =
+    buildRequestsByClientFromRecords(clientRequestRecords);
 
   return mapClientRecord(record, requestsByClient, caseManagers);
 }
@@ -843,9 +911,6 @@ export async function getCaseManagerDetailById(
   if (!record) return null;
 
   const { fields } = record;
-  const payerNames = await getPayerNamesMap();
-  const base = mapCaseManagerFullRecord(record, payerNames);
-
   const payerField = pickField(fields, [
     "Payer",
     "Payers",
@@ -853,6 +918,9 @@ export async function getCaseManagerDetailById(
     "Related Payers",
   ]);
   const payerIds = extractRecordIds(payerField);
+  const payerNames = await getPayerNamesByIds(payerIds);
+  const base = mapCaseManagerFullRecord(record, payerNames);
+
   const payer =
     payerIds.length > 0
       ? {
@@ -918,7 +986,10 @@ export async function getSupplierById(
   const record = await fetchAirtableRecord(AIRTABLE_SUPPLIERS_TABLE_ID, id);
   if (!record) return null;
 
-  const payerNames = await getPayerNamesMap();
+  const acceptedPayerIds = extractRecordIds(
+    pickField(record.fields, ["Accepted Payers", "Payers", "Accepted Payer"]),
+  );
+  const payerNames = await getPayerNamesByIds(acceptedPayerIds);
   return mapSupplierFullRecord(record, payerNames);
 }
 
@@ -981,7 +1052,7 @@ export async function getSuppliers(): Promise<SupplierRecord[]> {
   }
 
   const [records, payerNames] = await Promise.all([
-    fetchAirtableRecords(AIRTABLE_SUPPLIERS_TABLE_ID),
+    loadSuppliersTable(),
     getPayerNamesMap(),
   ]);
 
@@ -995,22 +1066,52 @@ export async function getRequests(): Promise<RequestRecord[]> {
     return [];
   }
 
-  const fresh = { fresh: true };
   const [records, usersById, clientsById] = await Promise.all([
-    fetchAirtableRecords(AIRTABLE_REQUESTS_TABLE_ID, fresh),
-    getUsersNameMap(fresh),
-    getClientsNameMap(fresh),
+    loadRequestsTable(),
+    getUsersNameMap(),
+    getClientsNameMap(),
   ]);
   return records.map((record) =>
     mapRequestRecord(record, usersById, clientsById),
   );
 }
 
+export type RequestStatusCount = {
+  status: string;
+  count: number;
+};
+
+/** Lightweight fetch for the home dashboard — requests table only. */
+export async function getRequestStatusCounts(): Promise<RequestStatusCount[]> {
+  if (!isAirtableConfigured()) return [];
+
+  const records = await loadRequestsTable();
+  const counts = new Map<string, number>();
+
+  for (const record of records) {
+    const status = fieldToString(record.fields["Status"]).trim() || "Unknown";
+    counts.set(status, (counts.get(status) ?? 0) + 1);
+  }
+
+  return Array.from(counts.entries()).map(([status, count]) => ({
+    status,
+    count,
+  }));
+}
+
 export async function getRequestById(
   id: string,
 ): Promise<RequestRecord | null> {
-  const requests = await getRequests();
-  return requests.find((request) => request.id === id) ?? null;
+  if (!isAirtableConfigured()) return null;
+
+  const record = await fetchAirtableRecord(AIRTABLE_REQUESTS_TABLE_ID, id);
+  if (!record) return null;
+
+  const [usersById, clientsById] = await Promise.all([
+    getUsersNameMap(),
+    getClientsNameMap(),
+  ]);
+  return mapRequestRecord(record, usersById, clientsById);
 }
 
 export async function getClients(): Promise<ClientRecord[]> {
@@ -1018,13 +1119,13 @@ export async function getClients(): Promise<ClientRecord[]> {
     return [];
   }
 
-  const [clientRecords, requests, caseManagers] = await Promise.all([
-    fetchAirtableRecords(AIRTABLE_CLIENTS_TABLE_ID),
-    getRequests(),
-    getCaseManagersMap(),
+  const [clientRecords, requestRecords, caseManagers] = await Promise.all([
+    loadClientsTable(),
+    loadRequestsTable(),
+    loadCaseManagersMap(),
   ]);
 
-  const requestsByClient = buildRequestsByClient(requests);
+  const requestsByClient = buildRequestsByClientFromRecords(requestRecords);
 
   return clientRecords
     .map((record) => mapClientRecord(record, requestsByClient, caseManagers))
@@ -1052,10 +1153,10 @@ export async function getRequestFormData(): Promise<RequestFormData> {
 
   const [clientRecords, caseManagerRecords, supplierRecords, userRecords] =
     await Promise.all([
-      fetchAirtableRecords(AIRTABLE_CLIENTS_TABLE_ID),
-      fetchAirtableRecords(AIRTABLE_CASE_MANAGERS_TABLE_ID),
-      fetchAirtableRecords(AIRTABLE_SUPPLIERS_TABLE_ID),
-      fetchAirtableRecords(AIRTABLE_USERS_TABLE_ID),
+      loadClientsTable(),
+      loadCaseManagersTable(),
+      loadSuppliersTable(),
+      loadUsersTable(),
     ]);
 
   const caseManagers: CaseManagerOption[] = caseManagerRecords
@@ -1143,7 +1244,7 @@ async function createClientRecord(data: NewClientInput): Promise<string> {
 }
 
 async function getRandomRequestorId(): Promise<string | null> {
-  const records = await fetchAirtableRecords(AIRTABLE_USERS_TABLE_ID);
+  const records = await loadUsersTable();
   if (records.length === 0) return null;
   const random = records[Math.floor(Math.random() * records.length)];
   return random.id;
@@ -1280,7 +1381,7 @@ export async function getSupplierQuoteEmailContext(
       fetchAirtableRecordsByIds(AIRTABLE_CLIENTS_TABLE_ID, clientIds),
       fetchAirtableRecordsByIds(AIRTABLE_SUPPLIERS_TABLE_ID, supplierIds),
       fetchAirtableRecordsByIds(AIRTABLE_USERS_TABLE_ID, requestorIds),
-      getPayerNamesMap(),
+      getPayerNamesByIds(payerIds),
     ]);
 
   const clientRecord = clientRecords[0];
@@ -1531,12 +1632,14 @@ export async function getRequestDetailById(
   if (!record) return null;
 
   const { fields } = record;
-  const usersById = await getUsersNameMap();
-
   const requestorIds = extractRecordIds(fields["Requestor"]);
+  const requestorRecords = await fetchAirtableRecordsByIds(
+    AIRTABLE_USERS_TABLE_ID,
+    requestorIds,
+  );
   const requestor =
-    requestorIds
-      .map((userId) => usersById.get(userId) ?? "")
+    requestorRecords
+      .map((user) => getPersonDisplayName(user.fields))
       .filter((name) => name && name !== "—" && !isPlaceholderPersonName(name))
       .join(", ") || "—";
 
