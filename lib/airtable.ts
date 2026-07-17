@@ -20,6 +20,7 @@ import type {
   RequestDetail,
   RequestItemDetail,
   RequestQuoteDetail,
+  RequestQuoteLineItem,
   RequestSupplierSummary,
 } from "./requestDetail";
 import { isOpenRequest, type RequestRecord } from "./requests";
@@ -57,8 +58,19 @@ const AIRTABLE_USERS_TABLE_ID =
   process.env.AIRTABLE_USERS_TABLE_ID ?? "tbl7fqZOh1l9zfGiH";
 const AIRTABLE_QUOTES_TABLE_ID =
   process.env.AIRTABLE_QUOTES_TABLE_ID ?? "tblgXBwjlZCl3nGFy";
+const AIRTABLE_QUOTE_ITEMS_TABLE_ID =
+  process.env.AIRTABLE_QUOTE_ITEMS_TABLE_ID ?? "";
 const AIRTABLE_ACTIVITIES_TABLE_ID =
   process.env.AIRTABLE_ACTIVITIES_TABLE_ID ?? "tblaElDNG68teCUTz";
+
+function getQuoteItemsTableId(): string {
+  if (!AIRTABLE_QUOTE_ITEMS_TABLE_ID.trim()) {
+    throw new Error(
+      "AIRTABLE_QUOTE_ITEMS_TABLE_ID is not set. Create a Quote Items table in Airtable and add its table ID to .env.local.",
+    );
+  }
+  return AIRTABLE_QUOTE_ITEMS_TABLE_ID.trim();
+}
 
 // How long (seconds) to cache Airtable responses. Repeat page loads within
 // this window are served instantly from cache instead of re-fetching.
@@ -1543,9 +1555,37 @@ function mapItemDetail(record: AirtableRecord): RequestItemDetail {
   };
 }
 
+function mapQuoteLineItem(
+  record: AirtableRecord,
+  itemsById: Map<string, RequestItemDetail>,
+): RequestQuoteLineItem {
+  const { fields } = record;
+  const relatedItemIds = extractRecordIds(fields["Related Item"]);
+  const relatedItemId = relatedItemIds[0] ?? "";
+  const item = relatedItemId ? itemsById.get(relatedItemId) : undefined;
+  const quantity = toNumberOrNull(fields["Quantity"]) ?? item?.quantity ?? null;
+  const unitPrice = toNumberOrNull(fields["Unit Price"]);
+  const lineTotal =
+    toNumberOrNull(fields["Line Total"]) ??
+    (unitPrice != null && quantity != null ? unitPrice * quantity : unitPrice);
+
+  return {
+    id: record.id,
+    itemId: relatedItemId || item?.id || "",
+    name:
+      cleanString(fields["Name"]) ||
+      item?.name ||
+      "Untitled item",
+    quantity,
+    unitPrice,
+    lineTotal,
+  };
+}
+
 function mapQuoteDetail(
   record: AirtableRecord,
   suppliersById: Map<string, RequestSupplierSummary>,
+  lineItems: RequestQuoteLineItem[] = [],
 ): RequestQuoteDetail {
   const { fields } = record;
   const supplierIds = extractRecordIds(fields["Related Supplier"]);
@@ -1555,6 +1595,11 @@ function mapQuoteDetail(
         name: "Unknown supplier",
       })
     : null;
+
+  const dateReceived =
+    typeof fields["Date Received"] === "string"
+      ? fields["Date Received"]
+      : null;
 
   return {
     id: record.id,
@@ -1567,6 +1612,8 @@ function mapQuoteDetail(
       typeof fields["Created time"] === "string"
         ? fields["Created time"]
         : record.createdTime ?? null,
+    dateReceived,
+    lineItems,
   };
 }
 
@@ -1716,8 +1763,22 @@ export async function getRequestDetailById(
       },
   );
 
+  const items = itemRecords.map(mapItemDetail);
+  const itemsById = new Map(items.map((item) => [item.id, item]));
+
+  const quoteItemsByQuoteId = await loadQuoteItemsByQuoteIds(
+    allQuoteRecords.map((quote) => quote.id),
+    itemsById,
+  );
+
   const quotes = allQuoteRecords
-    .map((quote) => mapQuoteDetail(quote, suppliersById))
+    .map((quote) =>
+      mapQuoteDetail(
+        quote,
+        suppliersById,
+        quoteItemsByQuoteId.get(quote.id) ?? [],
+      ),
+    )
     .sort((a, b) => {
       if (a.price == null && b.price == null) return 0;
       if (a.price == null) return 1;
@@ -1767,7 +1828,7 @@ export async function getRequestDetailById(
     client: clientRecords[0] ? mapClientSummary(clientRecords[0]) : null,
     caseManager,
     suppliers,
-    items: itemRecords.map(mapItemDetail),
+    items,
     quotes,
     activities,
     ...sla,
@@ -1801,7 +1862,19 @@ export async function updateQuotePrice(
     ]),
   );
 
-  return mapQuoteDetail(updated, suppliersById);
+  const lineItemIds = extractRecordIds(updated.fields["Quote Items"]);
+  const itemsById = new Map<string, RequestItemDetail>();
+  const quoteItemsByQuoteId = await loadQuoteItemsByQuoteIds(
+    [quoteId],
+    itemsById,
+    lineItemIds,
+  );
+
+  return mapQuoteDetail(
+    updated,
+    suppliersById,
+    quoteItemsByQuoteId.get(quoteId) ?? [],
+  );
 }
 
 export async function attachQuotePdf(
@@ -1844,5 +1917,234 @@ export async function attachQuotePdf(
     ]),
   );
 
-  return mapQuoteDetail(updated, suppliersById);
+  const lineItemIds = extractRecordIds(updated.fields["Quote Items"]);
+  const itemsById = new Map<string, RequestItemDetail>();
+  const quoteItemsByQuoteId = await loadQuoteItemsByQuoteIds(
+    [quoteId],
+    itemsById,
+    lineItemIds,
+  );
+
+  return mapQuoteDetail(
+    updated,
+    suppliersById,
+    quoteItemsByQuoteId.get(quoteId) ?? [],
+  );
+}
+
+export type CreateQuoteLineInput = {
+  itemId: string;
+  unitPrice: number;
+};
+
+export type CreateQuoteInput = {
+  requestId: string;
+  supplierId: string;
+  dateReceived: string;
+  lines: CreateQuoteLineInput[];
+};
+
+async function loadQuoteItemsByQuoteIds(
+  quoteIds: string[],
+  itemsById: Map<string, RequestItemDetail>,
+  knownLineItemIds?: string[],
+): Promise<Map<string, RequestQuoteLineItem[]>> {
+  const result = new Map<string, RequestQuoteLineItem[]>();
+  for (const quoteId of quoteIds) {
+    result.set(quoteId, []);
+  }
+  if (quoteIds.length === 0) return result;
+
+  if (!AIRTABLE_QUOTE_ITEMS_TABLE_ID.trim()) {
+    return result;
+  }
+
+  const tableId = AIRTABLE_QUOTE_ITEMS_TABLE_ID.trim();
+  let lineRecords: AirtableRecord[] = [];
+
+  if (knownLineItemIds && knownLineItemIds.length > 0) {
+    lineRecords = await fetchAirtableRecordsByIds(tableId, knownLineItemIds);
+  } else {
+    // Prefer linked IDs when present; otherwise find by Related Quote.
+    const linkedIds: string[] = [];
+    // Fetch each quote's Quote Items link field by reusing known quote records isn't
+    // passed here — use formula lookup across quote IDs.
+    for (let i = 0; i < quoteIds.length; i += 5) {
+      const chunk = quoteIds.slice(i, i + 5);
+      const formula = `OR(${chunk
+        .map((id) => `FIND('${id}', ARRAYJOIN({Related Quote}))`)
+        .join(",")})`;
+      try {
+        const found = await fetchAirtableRecordsByFormula(tableId, formula);
+        lineRecords.push(...found);
+      } catch {
+        // Table missing or misconfigured — surface empty line items.
+      }
+    }
+  }
+
+  // Resolve any Related Item records not already in itemsById.
+  const missingItemIds = [
+    ...new Set(
+      lineRecords.flatMap((record) =>
+        extractRecordIds(record.fields["Related Item"]),
+      ),
+    ),
+  ].filter((id) => !itemsById.has(id));
+
+  if (missingItemIds.length > 0) {
+    const itemRecords = await fetchAirtableRecordsByIds(
+      AIRTABLE_ITEMS_TABLE_ID,
+      missingItemIds,
+    );
+    for (const item of itemRecords.map(mapItemDetail)) {
+      itemsById.set(item.id, item);
+    }
+  }
+
+  for (const record of lineRecords) {
+    const relatedQuoteIds = extractRecordIds(record.fields["Related Quote"]);
+    const quoteId = relatedQuoteIds[0];
+    if (!quoteId || !result.has(quoteId)) continue;
+    result.get(quoteId)!.push(mapQuoteLineItem(record, itemsById));
+  }
+
+  return result;
+}
+
+export async function createQuoteWithLineItems(
+  input: CreateQuoteInput,
+): Promise<RequestQuoteDetail> {
+  const quoteItemsTableId = getQuoteItemsTableId();
+
+  const request = await fetchAirtableRecord(
+    AIRTABLE_REQUESTS_TABLE_ID,
+    input.requestId,
+  );
+  if (!request) {
+    throw new Error("Request not found");
+  }
+
+  const requestItemIds = extractRecordIds(request.fields["Items"]);
+  const requestSupplierIds = extractRecordIds(request.fields["Suppliers"]);
+
+  if (!requestSupplierIds.includes(input.supplierId)) {
+    throw new Error("Supplier is not linked to this request");
+  }
+
+  if (input.lines.length === 0) {
+    throw new Error("At least one line item price is required");
+  }
+
+  for (const line of input.lines) {
+    if (!requestItemIds.includes(line.itemId)) {
+      throw new Error(`Item ${line.itemId} is not on this request`);
+    }
+    if (
+      typeof line.unitPrice !== "number" ||
+      !Number.isFinite(line.unitPrice) ||
+      line.unitPrice < 0
+    ) {
+      throw new Error("Each unitPrice must be a non-negative number");
+    }
+  }
+
+  const itemRecords = await fetchAirtableRecordsByIds(
+    AIRTABLE_ITEMS_TABLE_ID,
+    input.lines.map((line) => line.itemId),
+  );
+  const itemsById = new Map(
+    itemRecords.map((record) => {
+      const mapped = mapItemDetail(record);
+      return [mapped.id, mapped] as const;
+    }),
+  );
+
+  let totalPrice = 0;
+  const lineFields: Record<string, unknown>[] = [];
+
+  for (const line of input.lines) {
+    const item = itemsById.get(line.itemId);
+    const quantity = item?.quantity ?? 1;
+    const lineTotal = line.unitPrice * (quantity ?? 1);
+    totalPrice += lineTotal;
+
+    const fields: Record<string, unknown> = {
+      Name: item?.name || "Untitled item",
+      "Related Item": [line.itemId],
+      "Unit Price": line.unitPrice,
+      Quantity: quantity ?? 1,
+    };
+    lineFields.push(fields);
+  }
+
+  const dateReceived = input.dateReceived.trim();
+  const quoteFields: Record<string, unknown> = {
+    Price: totalPrice,
+    "Is Manually Entered?": true,
+    "Related Request": [input.requestId],
+    "Related Supplier": [input.supplierId],
+  };
+  if (dateReceived) {
+    quoteFields["Date Received"] = dateReceived;
+  }
+
+  const [quoteRecord] = await createAirtableRecords(AIRTABLE_QUOTES_TABLE_ID, [
+    quoteFields,
+  ]);
+
+  const lineRecords = await createAirtableRecords(
+    quoteItemsTableId,
+    lineFields.map((fields) => ({
+      ...fields,
+      "Related Quote": [quoteRecord.id],
+    })),
+  );
+
+  const existingQuoteIds = extractRecordIds(request.fields["Supplier Quotes"]);
+  const nextQuoteIds = [...new Set([...existingQuoteIds, quoteRecord.id])];
+  const requestUpdate: Record<string, unknown> = {
+    "Supplier Quotes": nextQuoteIds,
+  };
+
+  const currentStatus = cleanString(request.fields["Status"]).toLowerCase();
+  if (
+    currentStatus === "quote requested" ||
+    currentStatus === "open" ||
+    currentStatus === "in progress" ||
+    currentStatus === "draft" ||
+    currentStatus === "overdue" ||
+    !currentStatus
+  ) {
+    requestUpdate["Status"] = "Quote Received";
+  }
+
+  await updateAirtableRecord(
+    AIRTABLE_REQUESTS_TABLE_ID,
+    input.requestId,
+    requestUpdate,
+  );
+
+  const supplierRecords = await fetchAirtableRecordsByIds(
+    AIRTABLE_SUPPLIERS_TABLE_ID,
+    [input.supplierId],
+  );
+  const suppliersById = new Map(
+    supplierRecords.map((supplier) => [
+      supplier.id,
+      {
+        id: supplier.id,
+        name:
+          cleanString(supplier.fields["Supplier Name"]) ||
+          cleanString(supplier.fields["Name"]) ||
+          "Unnamed supplier",
+      } satisfies RequestSupplierSummary,
+    ]),
+  );
+
+  const lineItems = lineRecords.map((record) =>
+    mapQuoteLineItem(record, itemsById),
+  );
+
+  return mapQuoteDetail(quoteRecord, suppliersById, lineItems);
 }

@@ -195,7 +195,12 @@ export function RequestDetailView({ request }: RequestDetailViewProps) {
 
           <Card>
             <CardTitle>{`Related quotes (${request.quotes.length})`}</CardTitle>
-            <RelatedQuotes quotes={request.quotes} />
+            <RelatedQuotes
+              requestId={request.id}
+              quotes={request.quotes}
+              suppliers={request.suppliers}
+              items={request.items}
+            />
           </Card>
 
           <div className="px-1 pt-1 text-xs leading-relaxed text-[#606060]">

@@ -43,6 +43,15 @@ export type RequestClientSummary = {
   postcode: string;
 };
 
+export type RequestQuoteLineItem = {
+  id: string;
+  itemId: string;
+  name: string;
+  quantity: number | null;
+  unitPrice: number | null;
+  lineTotal: number | null;
+};
+
 export type RequestQuoteDetail = {
   id: string;
   quoteId: string;
@@ -51,6 +60,8 @@ export type RequestQuoteDetail = {
   supplier: RequestSupplierSummary | null;
   attachments: RequestAttachment[];
   createdAt: string | null;
+  dateReceived: string | null;
+  lineItems: RequestQuoteLineItem[];
 };
 
 export type RequestActivityDetail = {

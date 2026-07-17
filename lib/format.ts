@@ -85,7 +85,16 @@ export function formatDateTime(value: string | null | undefined): string {
 
 export function formatDate(value: string | null | undefined): string {
   if (!value) return "—";
-  const date = new Date(value);
+
+  // Airtable date fields are YYYY-MM-DD; parse as local date to avoid UTC shift.
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  const date = dateOnly
+    ? new Date(
+        Number(dateOnly[1]),
+        Number(dateOnly[2]) - 1,
+        Number(dateOnly[3]),
+      )
+    : new Date(value);
   if (Number.isNaN(date.getTime())) return value;
 
   const day = String(date.getDate()).padStart(2, "0");
