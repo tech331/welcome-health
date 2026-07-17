@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, Source_Serif_4 } from "next/font/google";
 import "./globals.css";
-import { AppShell } from "@/components/AppShell";
 
 const sourceSerif = Source_Serif_4({
   subsets: ["latin"],
@@ -28,9 +27,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${sourceSerif.variable} ${plusJakarta.variable}`}>
-      <body className="font-sans antialiased">
-        <AppShell>{children}</AppShell>
-      </body>
+      <body className="font-sans antialiased">{children}</body>
     </html>
   );
 }

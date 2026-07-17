@@ -42,7 +42,7 @@ type TextFieldProps = {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  type?: "text" | "email" | "tel" | "url" | "date";
+  type?: "text" | "email" | "tel" | "url" | "date" | "password";
   placeholder?: string;
   required?: boolean;
   optional?: boolean;

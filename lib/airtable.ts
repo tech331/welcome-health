@@ -2148,3 +2148,62 @@ export async function createQuoteWithLineItems(
 
   return mapQuoteDetail(quoteRecord, suppliersById, lineItems);
 }
+
+export type AuthenticatedUser = {
+  id: string;
+  email: string;
+};
+
+function escapeAirtableFormulaString(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+function passwordsEqual(expected: string, provided: string): boolean {
+  // Length mismatch still runs a compare against itself to reduce timing leaks.
+  if (expected.length !== provided.length) {
+    let mismatch = 0;
+    for (let i = 0; i < provided.length; i += 1) {
+      mismatch |= provided.charCodeAt(i) ^ 0;
+    }
+    return mismatch < 0; // always false
+  }
+  let diff = 0;
+  for (let i = 0; i < expected.length; i += 1) {
+    diff |= expected.charCodeAt(i) ^ provided.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+/**
+ * Look up a Users record by email and verify the Password field.
+ * For internal testing only — passwords are stored plaintext in Airtable.
+ */
+export async function authenticateUser(
+  email: string,
+  password: string,
+): Promise<AuthenticatedUser | null> {
+  if (!isAirtableConfigured()) return null;
+
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail || !password) return null;
+
+  const formula = `LOWER({Email})='${escapeAirtableFormulaString(normalizedEmail)}'`;
+  const records = await fetchAirtableRecordsByFormula(
+    AIRTABLE_USERS_TABLE_ID,
+    formula,
+  );
+  const record = records[0];
+  if (!record) return null;
+
+  const storedPassword = cleanString(record.fields["Password"]);
+  if (!storedPassword || storedPassword === "—") return null;
+  if (!passwordsEqual(storedPassword, password)) return null;
+
+  const recordEmail =
+    cleanString(record.fields["Email"]).toLowerCase() || normalizedEmail;
+
+  return {
+    id: record.id,
+    email: recordEmail,
+  };
+}
