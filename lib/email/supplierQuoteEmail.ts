@@ -13,6 +13,14 @@ export type SupplierQuoteEmailParams = {
   requestorPhone: string;
   items: SupplierQuoteEmailItem[];
   slaBusinessDays: number | null;
+  /** Opening ask after "Hi there,". Defaults to the standard quote request line. */
+  introAsk?: string;
+  /** Optional paragraph shown after the intro ask (e.g. supplier list on reminders). */
+  extraIntroLine?: string;
+  /** When true, skip the client name/phone/address/provider block. */
+  omitClientBlock?: boolean;
+  /** Optional paragraph after the equipment table (used by reminders). */
+  closingParagraph?: string;
 };
 
 function formatProvider(payerName: string): string {
@@ -99,6 +107,32 @@ export function buildSupplierQuoteEmailHtml(params: SupplierQuoteEmailParams): s
                 </tr>`
     : "";
 
+  const introAsk =
+    params.introAsk?.trim() ||
+    "Can you please provide a quote for the following client:";
+  const extraIntroLine = params.extraIntroLine?.trim();
+  const extraIntroRow = extraIntroLine
+    ? `<p style="margin: 12px 0 0 0; font-size: 16px; line-height: 1.6; color: #333333;">${escapeHtml(extraIntroLine)}</p>`
+    : "";
+
+  const clientRow =
+    params.omitClientBlock || !clientBlock
+      ? ""
+      : `<tr>
+                  <td align="left" style="padding-bottom: 28px;">
+                    ${clientBlock}
+                  </td>
+                </tr>`;
+
+  const closingParagraph = params.closingParagraph?.trim();
+  const closingRow = closingParagraph
+    ? `<tr>
+                  <td align="left" style="padding-bottom: 28px;">
+                    <p style="margin: 0; font-size: 16px; line-height: 1.6; color: #333333;">${escapeHtml(closingParagraph)}</p>
+                  </td>
+                </tr>`
+    : "";
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -135,14 +169,11 @@ export function buildSupplierQuoteEmailHtml(params: SupplierQuoteEmailParams): s
                 <tr>
                   <td align="left" style="padding-bottom: 20px;">
                     <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 1.6; color: #333333;">Hi there,</p>
-                    <p style="margin: 0; font-size: 16px; line-height: 1.6; color: #333333;">Can you please provide a quote for the following client:</p>
+                    <p style="margin: 0; font-size: 16px; line-height: 1.6; color: #333333;">${escapeHtml(introAsk)}</p>
+                    ${extraIntroRow}
                   </td>
                 </tr>
-                <tr>
-                  <td align="left" style="padding-bottom: 28px;">
-                    ${clientBlock}
-                  </td>
-                </tr>
+                ${clientRow}
                 <tr>
                   <td align="left" style="padding-bottom: 8px;">
                     <p style="margin: 0; font-size: 16px; font-weight: 700; color: #1b4332;">Equipment</p>
@@ -163,6 +194,7 @@ export function buildSupplierQuoteEmailHtml(params: SupplierQuoteEmailParams): s
                     </table>
                   </td>
                 </tr>
+                ${closingRow}
                 ${slaRow}
                 <tr>
                   <td align="left">
@@ -217,16 +249,24 @@ export function buildSupplierQuoteEmailText(params: SupplierQuoteEmailParams): s
 
   const slaSentence = buildSlaSentence(params.slaBusinessDays);
   const slaBlock = slaSentence ? `\n${slaSentence}\n` : "";
+  const introAsk =
+    params.introAsk?.trim() ||
+    "Can you please provide a quote for the following client:";
+  const extraIntroLine = params.extraIntroLine?.trim();
+  const extraIntroBlock = extraIntroLine ? `\n${extraIntroLine}\n` : "\n";
+  const clientBlockText =
+    params.omitClientBlock || clientLines.length === 0
+      ? ""
+      : `${clientLines.join("\n")}\n\n`;
+  const closingParagraph = params.closingParagraph?.trim();
+  const closingBlock = closingParagraph ? `\n${closingParagraph}\n` : "";
 
   return `Hi there,
 
-Can you please provide a quote for the following client:
-
-${clientLines.join("\n")}
-
-Equipment
+${introAsk}
+${extraIntroBlock}${clientBlockText}Equipment
 ${equipmentLines.join("\n")}
-${slaBlock}
+${closingBlock}${slaBlock}
 Kind regards,
 
 ${signatureLines.join("\n")}

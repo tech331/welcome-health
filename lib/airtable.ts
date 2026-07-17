@@ -355,28 +355,42 @@ async function fetchRecordsLinkedToRequest(
 async function fetchAirtableRecordsByFormula(
   tableId: string,
   formula: string,
+  options?: { fresh?: boolean },
 ): Promise<AirtableRecord[]> {
   const apiKey = getApiKey();
   if (!apiKey) return [];
 
-  const url = new URL(
-    `${AIRTABLE_API_URL}/${AIRTABLE_BASE_ID}/${encodeURIComponent(tableId)}`,
-  );
-  url.searchParams.set("filterByFormula", formula);
+  const records: AirtableRecord[] = [];
+  let offset: string | undefined;
 
-  const response = await fetch(url.toString(), {
-    headers: { Authorization: `Bearer ${apiKey}` },
-    next: { revalidate: AIRTABLE_REVALIDATE_SECONDS },
-  });
-
-  if (!response.ok) {
-    throw new Error(
-      `Airtable request failed (${response.status}): ${await response.text()}`,
+  do {
+    const url = new URL(
+      `${AIRTABLE_API_URL}/${AIRTABLE_BASE_ID}/${encodeURIComponent(tableId)}`,
     );
-  }
+    url.searchParams.set("filterByFormula", formula);
+    if (offset) {
+      url.searchParams.set("offset", offset);
+    }
 
-  const data = (await response.json()) as AirtableListResponse;
-  return data.records;
+    const response = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      ...(options?.fresh
+        ? { cache: "no-store" }
+        : { next: { revalidate: AIRTABLE_REVALIDATE_SECONDS } }),
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Airtable request failed (${response.status}): ${await response.text()}`,
+      );
+    }
+
+    const data = (await response.json()) as AirtableListResponse;
+    records.push(...data.records);
+    offset = data.offset;
+  } while (offset);
+
+  return records;
 }
 
 function fieldToString(value: unknown): string {
@@ -1481,6 +1495,163 @@ export async function createActivityRecord(params: {
     },
   ]);
   return record.id;
+}
+
+export type QuoteReminderCandidate = {
+  id: string;
+  requestId: string;
+  slaBusinessDays: number;
+  createdAt: string;
+  items: { name: string; url: string }[];
+};
+
+function calendarDateInTimeZone(date: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function isActivityOnCalendarDay(
+  createdAt: string | null | undefined,
+  day: string,
+  timeZone: string,
+): boolean {
+  if (!createdAt) return false;
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return false;
+  return calendarDateInTimeZone(date, timeZone) === day;
+}
+
+/**
+ * Requests still awaiting quotes: Quote Requested (and similar open statuses),
+ * SLA configured, and no Supplier Quotes linked (also checks reverse Quotes link).
+ */
+export async function listQuoteReminderCandidates(): Promise<
+  QuoteReminderCandidate[]
+> {
+  if (!isAirtableConfigured()) return [];
+
+  const formula = `AND(
+    OR(
+      {Status}='Quote Requested',
+      {Status}='Open',
+      {Status}='In Progress',
+      {Status}='Overdue'
+    ),
+    {SLA (business days)}>0
+  )`;
+
+  const records = await fetchAirtableRecordsByFormula(
+    AIRTABLE_REQUESTS_TABLE_ID,
+    formula,
+    { fresh: true },
+  );
+
+  const withoutLinkedQuotes = records.filter(
+    (record) => extractRecordIds(record.fields["Supplier Quotes"]).length === 0,
+  );
+
+  const candidates: QuoteReminderCandidate[] = [];
+
+  for (const record of withoutLinkedQuotes) {
+    const reverseQuotes = await fetchRecordsLinkedToRequest(
+      AIRTABLE_QUOTES_TABLE_ID,
+      record.id,
+    );
+    if (reverseQuotes.length > 0) continue;
+
+    const slaBusinessDays = toNumberOrNull(record.fields["SLA (business days)"]);
+    if (slaBusinessDays == null || slaBusinessDays <= 0) continue;
+
+    const createdAt =
+      typeof record.fields["Created time"] === "string"
+        ? record.fields["Created time"]
+        : record.createdTime;
+    if (!createdAt) continue;
+
+    const itemIds = extractRecordIds(record.fields["Items"]);
+    const itemRecords = await fetchAirtableRecordsByIds(
+      AIRTABLE_ITEMS_TABLE_ID,
+      itemIds,
+    );
+    const items = itemRecords.map((item) => ({
+      name:
+        cleanString(
+          pickField(item.fields, ["Item Name", "Name", "name", "Item"]),
+        ) || "Untitled item",
+      url: cleanString(item.fields["URL"]),
+    }));
+
+    const requestIdValue = record.fields["Request ID"] ?? record.id;
+
+    candidates.push({
+      id: record.id,
+      requestId: formatRequestId(fieldToString(requestIdValue)),
+      slaBusinessDays,
+      createdAt,
+      items,
+    });
+  }
+
+  return candidates;
+}
+
+/** True if an outbound Quote Reminder activity was already logged today (Sydney). */
+export async function hasQuoteReminderActivityToday(
+  requestRecordId: string,
+): Promise<boolean> {
+  const record = await fetchAirtableRecord(
+    AIRTABLE_REQUESTS_TABLE_ID,
+    requestRecordId,
+  );
+  if (!record) return false;
+
+  const activityIds = extractRecordIds(record.fields["Activities"]);
+  let activities =
+    activityIds.length > 0
+      ? await fetchAirtableRecordsByIds(
+          AIRTABLE_ACTIVITIES_TABLE_ID,
+          activityIds,
+        )
+      : [];
+
+  if (activities.length === 0) {
+    activities = await fetchRecordsLinkedToRequest(
+      AIRTABLE_ACTIVITIES_TABLE_ID,
+      requestRecordId,
+    );
+  }
+
+  const timeZone = "Australia/Sydney";
+  const today = calendarDateInTimeZone(new Date(), timeZone);
+
+  return activities.some((activity) => {
+    const content = cleanString(activity.fields["Content"]);
+    const direction = cleanString(activity.fields["Direction"]).toLowerCase();
+    const channel = cleanString(activity.fields["Channel"]).toLowerCase();
+    if (!content.toLowerCase().startsWith("quote reminder")) return false;
+    if (direction && direction !== "outbound") return false;
+    if (channel && channel !== "email") return false;
+    const createdAt =
+      typeof activity.fields["Created time"] === "string"
+        ? activity.fields["Created time"]
+        : activity.createdTime;
+    return isActivityOnCalendarDay(createdAt, today, timeZone);
+  });
+}
+
+export function shouldSendQuoteReminder(params: {
+  createdAt: string;
+  slaBusinessDays: number;
+  now?: Date;
+}): boolean {
+  const { createdAt, slaBusinessDays, now = new Date() } = params;
+  if (slaBusinessDays <= 0) return false;
+  const daysElapsed = businessDaysBetween(new Date(createdAt), now);
+  return daysElapsed > 0 && daysElapsed % slaBusinessDays === 0;
 }
 
 function mapAttachments(value: unknown): RequestAttachment[] {

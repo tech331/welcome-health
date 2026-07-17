@@ -4,6 +4,7 @@ import { AUTH_COOKIE, verifySessionToken } from "@/lib/auth";
 function isPublicPath(pathname: string): boolean {
   if (pathname === "/login") return true;
   if (pathname === "/api/login") return true;
+  if (pathname.startsWith("/api/cron/")) return true;
   if (pathname.startsWith("/_next")) return true;
   if (pathname === "/favicon.ico") return true;
   if (/\.(?:svg|png|jpg|jpeg|gif|webp|ico)$/i.test(pathname)) return true;
